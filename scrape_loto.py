@@ -227,6 +227,127 @@ def scrape_month(driver, yyyymm, month_select_name, game_select_name, wait_secs)
     return draws
 
 
+def probe_month(driver, probe_month_str, wait_secs):
+    """
+    Try several ways to load one month's results and report which (if any) works.
+    Writes findings to loto_probe.txt. This is how we discover the site's real
+    filter mechanism instead of guessing.
+    """
+    L = []
+
+    def note(s):
+        L.append(s)
+        log(s)
+
+    def count_hits(tag):
+        """How many rows for the probe month are on screen right now?"""
+        rows = driver.find_elements(By.CSS_SELECTOR, "table tr, tr")
+        texts = [" ".join((r.text or "").split()) for r in rows]
+        parsed = [parse_row_text(t) for t in texts]
+        hits = [p for p in parsed if p and p["date"].startswith(probe_month_str)]
+        any_loto = [p for p in parsed if p]
+        note(f"  [{tag}] url={driver.current_url}")
+        note(f"  [{tag}] rows={len(rows)}  loto-rows={len(any_loto)}  rows-in-{probe_month_str}={len(hits)}")
+        if any_loto:
+            note(f"  [{tag}] first loto row date seen: {any_loto[0]['date']}")
+        for t in texts[:4]:
+            if t:
+                note(f"  [{tag}] sample: {t[:150]}")
+        return len(hits)
+
+    note(f"=== PROBE for {probe_month_str} ===")
+
+    # --- Strategy A: GET with query params in the URL ---
+    for qs in (
+        f"?data%5BLottery%5D%5Bname%5D=Loto&data%5BLottery%5D%5Bdate%5D={probe_month_str}",
+        f"?name=Loto&date={probe_month_str}",
+        f"/{probe_month_str}",
+    ):
+        url = HISTORY_URL + qs
+        note(f"\n-- Strategy A: GET {url}")
+        try:
+            driver.get(url)
+            time.sleep(2.5)
+            if count_hits("A") > 0:
+                note(f"  ==> SUCCESS with URL: {url}")
+        except Exception as e:
+            note(f"  [A] error: {e}")
+
+    # --- Strategy B: select dropdowns, then submit the form ---
+    note("\n-- Strategy B: select + submit form")
+    try:
+        driver.get(HISTORY_URL)
+        time.sleep(2.5)
+        Select(driver.find_element(By.ID, "LotteryName")).select_by_value("Loto")
+        m = driver.find_element(By.ID, "LotteryDate")
+        Select(m).select_by_value(probe_month_str)
+        forms = driver.find_elements(By.TAG_NAME, "form")
+        note(f"  [B] {len(forms)} form(s) on page")
+        for i, f in enumerate(forms):
+            note(f"  [B] form#{i} action={f.get_attribute('action')!r} method={f.get_attribute('method')!r} id={f.get_attribute('id')!r}")
+            btns = f.find_elements(By.CSS_SELECTOR, "input[type=submit], button, a.btn, input[type=button]")
+            for b in btns[:6]:
+                note(f"        btn: tag={b.tag_name} type={b.get_attribute('type')!r} "
+                     f"value={b.get_attribute('value')!r} text={(b.text or '').strip()[:40]!r}")
+        try:
+            form = m.find_element(By.XPATH, "./ancestor::form[1]")
+            form.submit()
+            time.sleep(3)
+            if count_hits("B") > 0:
+                note("  ==> SUCCESS with form.submit()")
+        except Exception as e:
+            note(f"  [B] submit failed: {e}")
+    except Exception as e:
+        note(f"  [B] error: {e}")
+
+    # --- Strategy C: select dropdowns and fire change/onchange events ---
+    note("\n-- Strategy C: select + dispatch change events")
+    try:
+        driver.get(HISTORY_URL)
+        time.sleep(2.5)
+        driver.execute_script("""
+            const g = document.getElementById('LotteryName');
+            const d = document.getElementById('LotteryDate');
+            if (g) { g.value = 'Loto'; g.dispatchEvent(new Event('change', {bubbles:true})); }
+            if (d) { d.value = arguments[0]; d.dispatchEvent(new Event('change', {bubbles:true})); }
+        """, probe_month_str)
+        time.sleep(3.5)
+        if count_hits("C") > 0:
+            note("  ==> SUCCESS with change events")
+    except Exception as e:
+        note(f"  [C] error: {e}")
+
+    # --- Strategy D: click every button/link on the filter form ---
+    note("\n-- Strategy D: select then click each candidate button")
+    try:
+        driver.get(HISTORY_URL)
+        time.sleep(2.5)
+        Select(driver.find_element(By.ID, "LotteryName")).select_by_value("Loto")
+        Select(driver.find_element(By.ID, "LotteryDate")).select_by_value(probe_month_str)
+        cands = driver.find_elements(
+            By.CSS_SELECTOR, "input[type=submit], button, a.btn, .btn, input[type=button]")
+        note(f"  [D] {len(cands)} candidate control(s)")
+        for i, b in enumerate(cands[:8]):
+            label = (b.get_attribute('value') or b.text or '').strip()[:40]
+            note(f"  [D] clicking #{i} tag={b.tag_name} label={label!r}")
+            try:
+                driver.execute_script("arguments[0].click();", b)
+                time.sleep(2.5)
+                if count_hits(f"D{i}") > 0:
+                    note(f"  ==> SUCCESS clicking control #{i} ({label!r})")
+                    break
+                Select(driver.find_element(By.ID, "LotteryDate")).select_by_value(probe_month_str)
+            except Exception as e:
+                note(f"      click failed: {e}")
+    except Exception as e:
+        note(f"  [D] error: {e}")
+
+    out = "\n".join(L)
+    p = OUTPUT_FILE.parent / "loto_probe.txt"
+    p.write_text(out, encoding="utf-8")
+    log(f"\n>>> Wrote {p}. Send that file to Claude. <<<")
+
+
 def dump_debug(driver, wait_secs):
     """
     Open the history page and write everything about its structure to loto_debug.txt:
@@ -334,6 +455,7 @@ def main():
     ap.add_argument("--no-headless", dest="headless", action="store_false", help="show the browser window")
     ap.add_argument("--dry-run", action="store_true", help="scrape but don't write data.json")
     ap.add_argument("--debug", action="store_true", help="dump the page's structure to loto_debug.txt and exit")
+    ap.add_argument("--probe", metavar="YYYY-MM", help="try several filter strategies for one month; write loto_probe.txt and exit")
     ap.set_defaults(headless=True)
     args = ap.parse_args()
 
@@ -356,6 +478,13 @@ def main():
     if args.debug:
         try:
             dump_debug(driver, args.wait)
+        finally:
+            driver.quit()
+        return
+
+    if args.probe:
+        try:
+            probe_month(driver, args.probe, args.wait)
         finally:
             driver.quit()
         return
