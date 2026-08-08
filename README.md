@@ -14,21 +14,53 @@ economic crisis, so the true gap may be smaller than the raw date math
 suggests). Any date range you pick that falls inside this window will show
 incomplete or empty results.
 
-## 1. Backfill the gap (do this in Claude Code)
+## 1. Backfill the gap (run this on your laptop, NOT a phone)
+
+The scraper drives a real Chrome browser via Selenium — that needs a desktop/laptop
+with Chrome installed. It cannot run on iOS/Android (no Chrome binary + chromedriver
+on a phone).
+
 ```bash
+# one-time setup
 pip install selenium webdriver-manager beautifulsoup4
-python scrape_loto.py --start 2020-03      # targets just the missing window
+
+# fill the gap: scrapes 2020-03 through the current month, merges into data.json
+python scrape_loto.py
+
+# see all options
+python scrape_loto.py --help
 ```
-This scrapes from the given month through today and merges into `data.json`
-(existing dates are preserved; only missing ones are added — check the merge
-logic in `scrape_loto.py`'s `main()` if you want to change that behavior).
-The scraper's CSS/selector assumptions are best-effort (I couldn't test them
-against the live site from this sandbox — my network access here is locked
-to package registries, not lottery sites). If it comes back empty or errors
-on the dropdown selection, open
-https://www.yelleb.com/lottery/results/history in Chrome, inspect the
-"Date by Month" and "Lottery name" `<select>` elements, and update
-`MONTH_SELECT_NAME` / `GAME_SELECT_NAME` at the top of the script to match.
+
+What it does:
+- Defaults to `--start 2020-03 --end <current month>` (exactly the missing window).
+- **Merges safely**: existing draws in `data.json` are preserved (your verified recent
+  draws win); only dates not already present are added. Pass `--overwrite` to let
+  scraped rows replace same-date entries.
+- Auto-detects the month/game dropdowns by scanning every `<select>` on the page, so it
+  usually works without tuning. Retries each month, and writes partial progress if you
+  Ctrl-C or it's interrupted.
+
+Useful flags:
+- `--no-headless` — show the browser window so you can watch what it's doing (best first
+  run / for debugging).
+- `--dry-run` — scrape and report counts **without** writing `data.json`.
+- `--skip-existing` — skip months already present (faster re-syncs).
+- `--start YYYY-MM --end YYYY-MM` — scrape a specific window.
+- `--month-select NAME --game-select NAME` — only needed if auto-detection fails; set
+  these to the real `name`/`id` of the dropdowns (inspect them in Chrome).
+
+If it comes back empty: run `python scrape_loto.py --no-headless --start 2026-07` (a month
+you know has draws) and watch the browser. If the dropdowns aren't being found, inspect the
+"Date by Month" / "Lottery name" `<select>` elements on
+https://www.yelleb.com/lottery/results/history and pass their names via
+`--month-select` / `--game-select`.
+
+## 1b. Deploy the backfilled data
+After a successful scrape, commit and push — GitHub Actions auto-deploys to Pages:
+```bash
+git add data.json && git commit -m "Backfill 2020-2026 draws" && git push
+```
+Your site updates at https://<username>.github.io/loto/ within a minute or two.
 
 ## 2. Run locally
 Because `index.html` fetches `data.json` via `fetch()`, it needs to be served
@@ -40,9 +72,10 @@ python3 -m http.server 8000
 Then open `http://localhost:8000`.
 
 ## 3. Deploy to GitHub Pages
-1. Push `index.html` and `data.json` to a repo (root or a `/docs` folder).
-2. Repo Settings → Pages → set source to that branch/folder.
-3. Your app will be live at `https://<username>.github.io/<repo>/`.
+Already set up. `.github/workflows/deploy-pages.yml` auto-deploys the repo root to
+GitHub Pages on every push to `main`, so you just commit and push — no manual steps.
+Live at `https://<username>.github.io/loto/`. (First-time setup only: Settings → Pages →
+Source → "GitHub Actions", which has already been done for this repo.)
 
 ## 4. Keeping it updated
 - **New draws**: use the "Add a draw manually" form in the app — it saves to
