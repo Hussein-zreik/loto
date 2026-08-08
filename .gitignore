@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 .DS_Store
+loto_debug.txt
+loto_probe.txt
