@@ -106,6 +106,16 @@
   .flag{ font-size:12px; color:var(--muted); line-height:1.6; }
   .flag b{ color:var(--gold); font-weight:600; }
   .verdict{ font-family:'Space Grotesk',sans-serif; font-size:15px; margin:14px 0 6px; }
+
+  .rules-grid{ display:grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap:8px; }
+  .rule{ display:flex; align-items:center; gap:9px; background:var(--panel-2); border:1px solid var(--line);
+         border-radius:7px; padding:8px 11px; font-size:13px; }
+  .rule input[type=checkbox]{ accent-color: var(--gold); width:15px; height:15px; flex-shrink:0; cursor:pointer; }
+  .rule label{ flex:1; cursor:pointer; color:var(--text); }
+  .rule input[type=number]{ width:58px; background:var(--bg); border:1px solid var(--line); color:var(--text);
+         padding:5px 6px; border-radius:5px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; }
+  .rule.off label, .rule.off input[type=number]{ opacity:.45; }
+  .warn{ color:#E2B36A; font-size:12.5px; margin-top:12px; line-height:1.6; }
   .caveat{ font-size:12.5px; color: var(--muted); line-height:1.6; border-left:2px solid var(--gold-dim); padding-left:12px; margin-top:14px;}
   footer{ text-align:center; color:var(--muted); font-size:12px; margin-top: 30px; font-family:'IBM Plex Mono', monospace;}
 </style>
@@ -184,13 +194,8 @@
     on birthdays, patterns and sequences. Choosing an uncrowded combination means that if you do
     win, you are far less likely to split the prize.</p>
 
-    <div class="controls" style="margin-top:16px;">
-      <button class="primary" id="genBtn">Generate 5 low-crowding picks</button>
-      <button id="scoreToggleBtn" class="ghost">Score my own numbers</button>
-    </div>
-    <div id="genOut"></div>
-
-    <div id="scorePanel" style="display:none; margin-top:16px; border-top:1px solid var(--line); padding-top:16px;">
+    <div id="scorePanel" style="margin-top:16px; border-top:1px solid var(--line); padding-top:16px;">
+      <p style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-family:'IBM Plex Mono',monospace;margin:0 0 10px;">Score a combination</p>
       <div class="add-form">
         <div class="field"><label>N1</label><input type="number" min="1" max="42" class="sNum"></div>
         <div class="field"><label>N2</label><input type="number" min="1" max="42" class="sNum"></div>
@@ -202,6 +207,28 @@
       </div>
       <div id="scoreOut"></div>
     </div>
+  </section>
+
+  <section class="panel">
+    <h2>Generate numbers <span class="tag">rules engine</span></h2>
+
+    <div class="controls" style="margin-bottom:4px;">
+      <div class="field">
+        <label for="genCount">How many sets</label>
+        <input type="number" id="genCount" min="1" max="50" value="5">
+      </div>
+      <button class="primary" id="genBtn">Generate</button>
+      <button class="ghost" id="rulesResetBtn">Reset rules</button>
+      <button class="ghost" id="copyBtn">Copy results</button>
+    </div>
+
+    <p style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-family:'IBM Plex Mono',monospace;margin:18px 0 10px;">Rules — tick to enforce</p>
+    <div id="rulesBox" class="rules-grid"></div>
+
+    <div id="genOut"></div>
+    <p class="caveat">Rules shape <i>which</i> combinations you play; they cannot change the odds of any
+    one of them winning (1 in 5,245,786 regardless). Tightening rules narrows the pool you draw from —
+    it does not improve your chance.</p>
   </section>
 
   <section class="panel">
@@ -263,6 +290,7 @@ async function init(){
     document.getElementById('metaInfo').textContent = 'Could not load data.json';
   }
   mergeDraws();
+  resetRules();
 
   // default range: last 6 months
   const to = new Date();
@@ -435,41 +463,142 @@ function randomCombo(){
   return pool.slice(0,6).sort((a,b)=>a-b);
 }
 
-/* Sample many random tickets and keep the least-crowded ones. Selection is on
-   crowding only -- every combination remains equally likely to win. */
-function generatePicks(n = 5){
-  const cands = [];
-  for(let i=0;i<4000;i++){
-    const c = randomCombo();
-    cands.push({ nums:c, ...crowdingScore(c) });
+/* ---------------------------------------------------------------------------
+   RULES ENGINE
+   Each rule is declarative: { id, label, def (default value), on (enabled by
+   default), test(sortedNums, value) -> boolean }. To add a rule, append one
+   entry here -- the checkbox, input and filtering all follow automatically.
+   --------------------------------------------------------------------------- */
+function maxRunOf(s){
+  let run = 1, mx = 1;
+  for(let i=1;i<s.length;i++){ run = (s[i] === s[i-1]+1) ? run+1 : 1; mx = Math.max(mx, run); }
+  return mx;
+}
+function isArithmetic(s){
+  const step = s[1]-s[0];
+  return step > 0 && s.every((n,i)=> i===0 || n-s[i-1] === step);
+}
+function drawnBefore(s){
+  const key = s.join('-');
+  return allDraws.some(d => [...d.numbers].sort((a,b)=>a-b).join('-') === key);
+}
+
+const RULE_DEFS = [
+  { id:'minHigh',  label:'At least N numbers above 31', def:2,  on:true,
+    test:(s,v)=> s.filter(n=>n>31).length >= v },
+  { id:'maxRun',   label:'Longest consecutive run at most', def:2, on:true,
+    test:(s,v)=> maxRunOf(s) <= v },
+  { id:'minOdd',   label:'At least N odd numbers', def:2, on:true,
+    test:(s,v)=> s.filter(n=>n%2).length >= v },
+  { id:'maxOdd',   label:'At most N odd numbers', def:4, on:true,
+    test:(s,v)=> s.filter(n=>n%2).length <= v },
+  { id:'sumMin',   label:'Sum at least', def:110, on:true,
+    test:(s,v)=> s.reduce((a,b)=>a+b,0) >= v },
+  { id:'sumMax',   label:'Sum at most', def:190, on:true,
+    test:(s,v)=> s.reduce((a,b)=>a+b,0) <= v },
+  { id:'minSpread',label:'Spread (highest − lowest) at least', def:20, on:true,
+    test:(s,v)=> (s[5]-s[0]) >= v },
+  { id:'maxDigit', label:'At most N sharing a last digit', def:2, on:false,
+    test:(s,v)=>{ const c={}; s.forEach(n=>c[n%10]=(c[n%10]||0)+1); return Math.max(...Object.values(c)) <= v; } },
+  { id:'noArith',  label:'No arithmetic sequence', def:null, on:true,
+    test:(s)=> !isArithmetic(s) },
+  { id:'notDrawn', label:'Never drawn before in this archive', def:null, on:false,
+    test:(s)=> !drawnBefore(s) },
+  { id:'maxCrowd', label:'Crowding score at most', def:15, on:true,
+    test:(s,v)=> crowdingScore(s).score <= v },
+];
+
+const RULE_STATE = {};
+function resetRules(){
+  RULE_DEFS.forEach(r => RULE_STATE[r.id] = { on:r.on, val:r.def });
+  renderRules();
+}
+function renderRules(){
+  document.getElementById('rulesBox').innerHTML = RULE_DEFS.map(r=>{
+    const st = RULE_STATE[r.id];
+    const num = r.def === null ? '' :
+      `<input type="number" data-val="${r.id}" value="${st.val}">`;
+    return `<div class="rule ${st.on?'':'off'}" data-row="${r.id}">
+      <input type="checkbox" data-on="${r.id}" ${st.on?'checked':''} id="chk_${r.id}">
+      <label for="chk_${r.id}">${r.label}</label>${num}
+    </div>`;
+  }).join('');
+
+  document.querySelectorAll('[data-on]').forEach(el=>{
+    el.addEventListener('change', ()=>{
+      RULE_STATE[el.dataset.on].on = el.checked;
+      document.querySelector(`[data-row="${el.dataset.on}"]`).classList.toggle('off', !el.checked);
+    });
+  });
+  document.querySelectorAll('[data-val]').forEach(el=>{
+    el.addEventListener('input', ()=>{
+      const v = parseInt(el.value,10);
+      if(!isNaN(v)) RULE_STATE[el.dataset.val].val = v;
+    });
+  });
+}
+
+function passesRules(s){
+  for(const r of RULE_DEFS){
+    const st = RULE_STATE[r.id];
+    if(st.on && !r.test(s, st.val)) return false;
   }
-  cands.sort((a,b)=> a.score - b.score || Math.abs(b.spread) - Math.abs(a.spread));
+  return true;
+}
+
+/* Rejection sampling: draw uniformly at random, keep sets satisfying every
+   enabled rule. Uniform within the allowed pool -- no combination is favoured. */
+function generateByRules(n){
   const out = [];
-  for(const c of cands){
-    if(out.length >= n) break;
-    if(out.some(o => o.nums.filter(x=>c.nums.includes(x)).length >= 4)) continue; // keep them distinct
-    out.push(c);
+  let tries = 0;
+  const MAX = 300000;
+  while(out.length < n && tries < MAX){
+    tries++;
+    const c = randomCombo();
+    if(!passesRules(c)) continue;
+    if(out.some(o => o.nums.filter(x=>c.includes(x)).length >= 5)) continue;
+    out.push({ nums:c, ...crowdingScore(c) });
   }
-  return out;
+  return { out, tries, exhausted: out.length < n };
 }
 
-function renderPicks(list){
-  document.getElementById('genOut').innerHTML = list.map(p => `
-    <div class="pick-row">
+function renderGenerated(res){
+  const el = document.getElementById('genOut');
+  if(res.out.length === 0){
+    el.innerHTML = `<p class="warn">No combination satisfied every rule after ${res.tries.toLocaleString()} attempts.
+      The rules are contradictory or far too tight — loosen the sum range or spread and try again.</p>`;
+    return;
+  }
+  el.innerHTML = res.out.map((p,i)=>{
+    const odd = p.nums.filter(n=>n%2).length;
+    return `<div class="pick-row">
+      <div class="pick-label" style="min-width:26px;">#${i+1}</div>
       <div class="balls">${p.nums.map(n=>ballHtml(n)).join('')}</div>
+      <div class="pick-label">sum ${p.sum} · ${odd}odd/${6-odd}even · ${p.high}&gt;31</div>
       <div class="pick-meter"><i style="width:${Math.max(4,p.score)}%;background:${scoreColor(p.score)}"></i></div>
-      <div class="pick-label">${scoreWord(p.score)} · ${p.score}/100</div>
-      <div class="pick-label">sum ${p.sum} · ${p.high} above 31</div>
-    </div>`).join('') +
-    `<p class="manual-note">All five have identical odds of winning (1 in 5,245,786). They are chosen only to
-     avoid combinations other players crowd into, so an unlikely win is less likely to be split.</p>`;
+      <div class="pick-label">${scoreWord(p.score)} ${p.score}</div>
+    </div>`;
+  }).join('') +
+  (res.exhausted
+    ? `<p class="warn">Only ${res.out.length} distinct set(s) met the rules after ${res.tries.toLocaleString()} attempts. Loosen a rule for more.</p>`
+    : `<p class="manual-note">${res.out.length} set(s) from ${res.tries.toLocaleString()} random draws. Every set has the same 1-in-5,245,786 chance.</p>`);
 }
 
-document.getElementById('genBtn').addEventListener('click', ()=> renderPicks(generatePicks(5)));
-
-document.getElementById('scoreToggleBtn').addEventListener('click', ()=>{
-  const p = document.getElementById('scorePanel');
-  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+let lastGenerated = [];
+document.getElementById('genBtn').addEventListener('click', ()=>{
+  const n = Math.max(1, Math.min(50, parseInt(document.getElementById('genCount').value,10) || 5));
+  const res = generateByRules(n);
+  lastGenerated = res.out;
+  renderGenerated(res);
+});
+document.getElementById('rulesResetBtn').addEventListener('click', resetRules);
+document.getElementById('copyBtn').addEventListener('click', ()=>{
+  if(!lastGenerated.length){ alert('Generate some sets first.'); return; }
+  const txt = lastGenerated.map(p=>p.nums.join(' ')).join('\n');
+  navigator.clipboard.writeText(txt).then(
+    ()=> alert('Copied:\n\n'+txt),
+    ()=> alert(txt)
+  );
 });
 
 document.getElementById('scoreBtn').addEventListener('click', ()=>{
