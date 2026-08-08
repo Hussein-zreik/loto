@@ -93,7 +93,19 @@
   .add-form .field label{ margin-bottom:0; }
   .manual-note{ font-size:12px; color:var(--muted); margin-top:10px; }
 
-  .empty{ color:var(--muted); font-size:13px; padding: 20px 0; text-align:center; }
+  .odds-grid{ display:grid; grid-template-columns: repeat(4,1fr); gap:10px; margin-bottom:4px; }
+  @media (max-width: 620px){ .odds-grid{ grid-template-columns: repeat(2,1fr); } }
+  .odds-cell{ background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .odds-k{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+  .odds-v{ font-family:'IBM Plex Mono',monospace; font-size:14px; color:var(--text); margin-top:3px; }
+
+  .pick-row{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px 0; border-bottom:1px solid var(--line); }
+  .pick-meter{ width:74px; height:6px; background:var(--panel-2); border-radius:3px; overflow:hidden; flex-shrink:0; }
+  .pick-meter i{ display:block; height:100%; }
+  .pick-label{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--muted); min-width:96px; }
+  .flag{ font-size:12px; color:var(--muted); line-height:1.6; }
+  .flag b{ color:var(--gold); font-weight:600; }
+  .verdict{ font-family:'Space Grotesk',sans-serif; font-size:15px; margin:14px 0 6px; }
   .caveat{ font-size:12.5px; color: var(--muted); line-height:1.6; border-left:2px solid var(--gold-dim); padding-left:12px; margin-top:14px;}
   footer{ text-align:center; color:var(--muted); font-size:12px; margin-top: 30px; font-family:'IBM Plex Mono', monospace;}
 </style>
@@ -152,6 +164,44 @@
       </div>
     </div>
     <p class="caveat">Each LOTO draw is an independent random event — historical frequency, however calculated, has no predictive effect on future draws. These figures describe what already happened, not what's likely to happen next.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Pick numbers <span class="tag">payout optimizer</span></h2>
+
+    <div class="odds-grid">
+      <div class="odds-cell"><div class="odds-k">Match 6</div><div class="odds-v">1 in 5,245,786</div></div>
+      <div class="odds-cell"><div class="odds-k">Match 5</div><div class="odds-v">1 in 24,286</div></div>
+      <div class="odds-cell"><div class="odds-k">Match 4</div><div class="odds-v">1 in 555</div></div>
+      <div class="odds-cell"><div class="odds-k">Match 3</div><div class="odds-v">1 in 37</div></div>
+    </div>
+
+    <p class="caveat"><b>What this tool can and cannot do.</b> It cannot improve your chance of
+    matching the draw — that is fixed at 1 in 5,245,786 for any set of six numbers, and this
+    archive's own draws test as statistically fair (χ²=49.0 vs. 56.9 critical), so "hot" and
+    "overdue" numbers carry no predictive signal whatsoever. What it <i>can</i> do is raise your
+    <b>expected payout</b>: jackpots are split between all winners, and human picks cluster hard
+    on birthdays, patterns and sequences. Choosing an uncrowded combination means that if you do
+    win, you are far less likely to split the prize.</p>
+
+    <div class="controls" style="margin-top:16px;">
+      <button class="primary" id="genBtn">Generate 5 low-crowding picks</button>
+      <button id="scoreToggleBtn" class="ghost">Score my own numbers</button>
+    </div>
+    <div id="genOut"></div>
+
+    <div id="scorePanel" style="display:none; margin-top:16px; border-top:1px solid var(--line); padding-top:16px;">
+      <div class="add-form">
+        <div class="field"><label>N1</label><input type="number" min="1" max="42" class="sNum"></div>
+        <div class="field"><label>N2</label><input type="number" min="1" max="42" class="sNum"></div>
+        <div class="field"><label>N3</label><input type="number" min="1" max="42" class="sNum"></div>
+        <div class="field"><label>N4</label><input type="number" min="1" max="42" class="sNum"></div>
+        <div class="field"><label>N5</label><input type="number" min="1" max="42" class="sNum"></div>
+        <div class="field"><label>N6</label><input type="number" min="1" max="42" class="sNum"></div>
+        <button class="primary" id="scoreBtn">Score</button>
+      </div>
+      <div id="scoreOut"></div>
+    </div>
   </section>
 
   <section class="panel">
@@ -324,6 +374,115 @@ document.getElementById('clearManualBtn').addEventListener('click', ()=>{
     mergeDraws();
     runQuery();
   }
+});
+
+/* ---------------------------------------------------------------------------
+   Crowding score: estimates how many OTHER players are likely to have picked
+   the same combination. It says nothing about the chance of winning (fixed at
+   1 in 5,245,786) -- only about how many ways a jackpot would be split.
+   Higher score = more crowded = lower expected payout.
+   --------------------------------------------------------------------------- */
+function crowdingScore(nums){
+  const s = [...nums].sort((a,b)=>a-b);
+  let score = 0; const flags = [];
+
+  const under32 = s.filter(n=>n<=31).length;
+  if(under32 === 6){
+    score += 35;
+    flags.push('<b>All six are ≤31</b> — the birthday range. This is the single most crowded pattern in any lottery; a large share of tickets never leave it.');
+  } else if(under32 === 5){
+    score += 12;
+    flags.push('Five of six are ≤31 (birthday range) — still a crowded region.');
+  }
+
+  const under13 = s.filter(n=>n<=12).length;
+  if(under13 >= 5){ score += 10; flags.push('Five or more are ≤12 — month numbers, heavily played.'); }
+
+  let run = 1, maxRun = 1;
+  for(let i=1;i<s.length;i++){ run = (s[i] === s[i-1]+1) ? run+1 : 1; maxRun = Math.max(maxRun, run); }
+  if(maxRun >= 4){ score += 22; flags.push(`A run of ${maxRun} consecutive numbers — visually appealing, commonly played.`); }
+  else if(maxRun === 3){ score += 8; flags.push('Contains three consecutive numbers.'); }
+
+  const step = s[1]-s[0];
+  if(step > 0 && s.every((n,i)=> i===0 || n-s[i-1] === step)){
+    score += 25;
+    flags.push(`Perfect arithmetic sequence (step ${step}) — a classic slip pattern.`);
+  }
+
+  if(s.every(n=>n%2===0) || s.every(n=>n%2===1)){ score += 8; flags.push('All even or all odd — an over-picked shape.'); }
+  if(s.every(n=>n%5===0)){ score += 12; flags.push('All multiples of 5 — a strong visual pattern.'); }
+
+  const lastDigits = new Set(s.map(n=>n%10));
+  if(lastDigits.size <= 2){ score += 10; flags.push('Only one or two distinct last digits — a column pattern on the slip.'); }
+
+  const sum = s.reduce((a,b)=>a+b,0);
+  if(sum < 100){ score += 8; flags.push(`Low sum (${sum}) — typical of birthday-only tickets.`); }
+
+  const key = s.join('-');
+  const past = allDraws.find(d => [...d.numbers].sort((a,b)=>a-b).join('-') === key);
+  if(past){ score += 15; flags.push(`This exact combination was drawn on <b>${past.date}</b> — past winners get deliberately replayed.`); }
+
+  if(flags.length === 0) flags.push('No common crowding patterns detected — this is a genuinely uncrowded ticket.');
+  return { score: Math.min(100, score), flags, sum, spread: s[5]-s[0], high: 6-under32 };
+}
+
+function scoreColor(v){ return v >= 55 ? '#D96A6A' : v >= 25 ? 'var(--gold)' : 'var(--teal)'; }
+function scoreWord(v){ return v >= 55 ? 'Crowded' : v >= 25 ? 'Moderate' : 'Uncrowded'; }
+
+function randomCombo(){
+  const pool = Array.from({length:42},(_,i)=>i+1);
+  for(let i=pool.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+  return pool.slice(0,6).sort((a,b)=>a-b);
+}
+
+/* Sample many random tickets and keep the least-crowded ones. Selection is on
+   crowding only -- every combination remains equally likely to win. */
+function generatePicks(n = 5){
+  const cands = [];
+  for(let i=0;i<4000;i++){
+    const c = randomCombo();
+    cands.push({ nums:c, ...crowdingScore(c) });
+  }
+  cands.sort((a,b)=> a.score - b.score || Math.abs(b.spread) - Math.abs(a.spread));
+  const out = [];
+  for(const c of cands){
+    if(out.length >= n) break;
+    if(out.some(o => o.nums.filter(x=>c.nums.includes(x)).length >= 4)) continue; // keep them distinct
+    out.push(c);
+  }
+  return out;
+}
+
+function renderPicks(list){
+  document.getElementById('genOut').innerHTML = list.map(p => `
+    <div class="pick-row">
+      <div class="balls">${p.nums.map(n=>ballHtml(n)).join('')}</div>
+      <div class="pick-meter"><i style="width:${Math.max(4,p.score)}%;background:${scoreColor(p.score)}"></i></div>
+      <div class="pick-label">${scoreWord(p.score)} · ${p.score}/100</div>
+      <div class="pick-label">sum ${p.sum} · ${p.high} above 31</div>
+    </div>`).join('') +
+    `<p class="manual-note">All five have identical odds of winning (1 in 5,245,786). They are chosen only to
+     avoid combinations other players crowd into, so an unlikely win is less likely to be split.</p>`;
+}
+
+document.getElementById('genBtn').addEventListener('click', ()=> renderPicks(generatePicks(5)));
+
+document.getElementById('scoreToggleBtn').addEventListener('click', ()=>{
+  const p = document.getElementById('scorePanel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+});
+
+document.getElementById('scoreBtn').addEventListener('click', ()=>{
+  const nums = [...document.querySelectorAll('.sNum')].map(i=>parseInt(i.value,10));
+  if(nums.some(isNaN) || nums.some(n=>n<1||n>42)){ alert('Enter six numbers between 1 and 42.'); return; }
+  if(new Set(nums).size !== 6){ alert('The six numbers must all be different.'); return; }
+  const r = crowdingScore(nums);
+  document.getElementById('scoreOut').innerHTML = `
+    <p class="verdict" style="color:${scoreColor(r.score)}">${scoreWord(r.score)} — ${r.score}/100 crowding</p>
+    <div class="pick-meter" style="width:100%;height:8px;"><i style="width:${Math.max(3,r.score)}%;background:${scoreColor(r.score)}"></i></div>
+    <ul class="flag" style="padding-left:18px;margin-top:12px;">${r.flags.map(f=>`<li>${f}</li>`).join('')}</ul>
+    <p class="manual-note">Sum ${r.sum} · spread ${r.spread} · ${r.high} number(s) above 31.
+    Your chance of winning is 1 in 5,245,786 either way — only the size of a potential share changes.</p>`;
 });
 
 document.getElementById('exportBtn').addEventListener('click', ()=>{
