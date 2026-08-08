@@ -197,6 +197,73 @@ def scrape_month(driver, yyyymm, month_select_name, game_select_name, wait_secs)
     return draws
 
 
+def dump_debug(driver, wait_secs):
+    """
+    Open the history page and write everything about its structure to loto_debug.txt:
+    dropdowns + their options, iframes, table rows, and a sample of the page text.
+    This is what lets a human 'show' the page to someone who can't reach the site.
+    """
+    driver.get(HISTORY_URL)
+    time.sleep(max(3, wait_secs // 3))
+    L = []
+    L.append(f"URL: {driver.current_url}")
+    L.append(f"TITLE: {driver.title!r}")
+
+    iframes = driver.find_elements(By.TAG_NAME, "iframe")
+    L.append(f"\n=== {len(iframes)} <iframe> element(s) ===")
+    for i, f in enumerate(iframes):
+        L.append(f"  [iframe {i}] src={f.get_attribute('src')!r} id={f.get_attribute('id')!r} name={f.get_attribute('name')!r}")
+
+    selects = driver.find_elements(By.TAG_NAME, "select")
+    L.append(f"\n=== {len(selects)} <select> element(s) ===")
+    for i, el in enumerate(selects):
+        try:
+            sel = Select(el)
+            opts = sel.options
+            L.append(f"  [select #{i}] name={el.get_attribute('name')!r} id={el.get_attribute('id')!r} "
+                     f"class={el.get_attribute('class')!r} ({len(opts)} options)")
+            for o in opts[:14]:
+                L.append(f"        value={ (o.get_attribute('value') or '')!r}  text={ (o.text or '').strip()!r}")
+            if len(opts) > 14:
+                L.append(f"        ...(+{len(opts) - 14} more)")
+        except Exception as e:
+            L.append(f"  [select #{i}] (couldn't read: {e})")
+
+    tables = driver.find_elements(By.TAG_NAME, "table")
+    rows = driver.find_elements(By.CSS_SELECTOR, "table tr, tr")
+    L.append(f"\n=== {len(tables)} <table>, {len(rows)} <tr> row(s); first 30 row texts ===")
+    for i, r in enumerate(rows[:30]):
+        t = " ".join((r.text or "").split())
+        if t:
+            L.append(f"  [row {i}] {t[:220]}")
+
+    # Common result-container class names, in case results aren't in a <table>.
+    for sel_css in (".result", ".results", ".draw", ".draws", "[class*=result]", "[class*=lottery]", "li"):
+        try:
+            els = driver.find_elements(By.CSS_SELECTOR, sel_css)
+        except Exception:
+            els = []
+        if els:
+            L.append(f"\n=== {len(els)} element(s) match {sel_css!r}; first 8 texts ===")
+            for r in els[:8]:
+                t = " ".join((r.text or "").split())
+                if t:
+                    L.append(f"    {t[:200]}")
+
+    try:
+        body = " ".join((driver.find_element(By.TAG_NAME, "body").text or "").split())
+    except Exception:
+        body = ""
+    L.append("\n=== body text sample (first 2500 chars) ===")
+    L.append(body[:2500])
+
+    out = "\n".join(L)
+    debug_path = OUTPUT_FILE.parent / "loto_debug.txt"
+    debug_path.write_text(out, encoding="utf-8")
+    log(out)
+    log(f"\n\n>>> Wrote {debug_path}. Send that file (or the text above) to Claude. <<<")
+
+
 def load_existing():
     if not OUTPUT_FILE.exists():
         return {}, {}
@@ -236,6 +303,7 @@ def main():
     ap.add_argument("--overwrite", action="store_true", help="let scraped rows replace existing same-date draws")
     ap.add_argument("--no-headless", dest="headless", action="store_false", help="show the browser window")
     ap.add_argument("--dry-run", action="store_true", help="scrape but don't write data.json")
+    ap.add_argument("--debug", action="store_true", help="dump the page's structure to loto_debug.txt and exit")
     ap.set_defaults(headless=True)
     args = ap.parse_args()
 
@@ -254,6 +322,14 @@ def main():
         if existing else f"No existing {OUTPUT_FILE.name}; starting fresh.")
 
     driver = build_driver(args.headless)
+
+    if args.debug:
+        try:
+            dump_debug(driver, args.wait)
+        finally:
+            driver.quit()
+        return
+
     scraped = {}
     try:
         for yyyymm in month_range(args.start, args.end):
