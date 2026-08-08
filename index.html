@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LOTO Archive — Lebanese LOTO 6/42</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0E1620;
+    --panel: #16202B;
+    --panel-2: #1C2733;
+    --line: #263241;
+    --text: #E9EEF3;
+    --muted: #8496A8;
+    --gold: #D9A94E;
+    --gold-dim: #7A6431;
+    --teal: #2FB3A0;
+    --teal-dim: #1B4F49;
+    --red-cold: #4A6FA5;
+    --radius: 10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: radial-gradient(1200px 600px at 10% -10%, #142230 0%, var(--bg) 55%);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    min-height: 100vh;
+    padding: 32px 20px 80px;
+  }
+  .wrap{ max-width: 1080px; margin: 0 auto; }
+
+  header{ display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:16px; margin-bottom: 28px; border-bottom: 1px solid var(--line); padding-bottom: 22px;}
+  .brand-eyebrow{ font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:.14em; color:var(--gold); text-transform:uppercase; margin:0 0 6px;}
+  h1{ font-family:'Space Grotesk', sans-serif; font-size: 30px; margin:0; letter-spacing:-0.01em; }
+  .meta{ font-size: 13px; color: var(--muted); font-family:'IBM Plex Mono', monospace; text-align:right; }
+
+  .panel{ background: var(--panel); border:1px solid var(--line); border-radius: var(--radius); padding: 22px; margin-bottom: 20px; }
+  .panel h2{ font-family:'Space Grotesk', sans-serif; font-size:16px; margin: 0 0 16px; display:flex; align-items:center; gap:10px;}
+  .panel h2 .tag{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--bg); background:var(--gold); padding:2px 8px; border-radius:20px; letter-spacing:.05em;}
+
+  .controls{ display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field label{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; font-family:'IBM Plex Mono', monospace;}
+  input[type=date]{
+    background: var(--panel-2); border:1px solid var(--line); color:var(--text);
+    padding:9px 10px; border-radius:6px; font-family:'IBM Plex Mono', monospace; font-size:13px; color-scheme: dark;
+  }
+  .quick-btns{ display:flex; gap:8px; flex-wrap:wrap; }
+  button{ cursor:pointer; font-family:'Inter', sans-serif; font-weight:600; font-size:13px; border-radius:6px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); padding:9px 14px; transition:.15s;}
+  button:hover{ border-color: var(--gold); color: var(--gold); }
+  button.primary{ background: var(--gold); color:#1a1305; border-color:var(--gold); }
+  button.primary:hover{ filter:brightness(1.08); color:#1a1305; }
+  button.ghost{ background:transparent; }
+
+  .summary-line{ margin-top:14px; font-size:13px; color:var(--muted); font-family:'IBM Plex Mono', monospace;}
+  .summary-line b{ color: var(--text); }
+
+  table{ width:100%; border-collapse: collapse; margin-top: 6px;}
+  th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-family:'IBM Plex Mono', monospace; padding: 8px 10px; border-bottom:1px solid var(--line);}
+  td{ padding: 10px; border-bottom:1px solid var(--line); font-size:13.5px; vertical-align: middle;}
+  tr:hover td{ background: var(--panel-2); }
+  .balls{ display:flex; gap:6px; flex-wrap:wrap; }
+  .ball{
+    width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:12.5px;
+    background: radial-gradient(circle at 32% 28%, #ffffff22, transparent 60%), var(--panel-2);
+    border:1px solid var(--line); color: var(--text);
+  }
+  .ball.bonus{ background: radial-gradient(circle at 32% 28%, #ffffff33, transparent 60%), var(--teal-dim); border-color: var(--teal); color:#DFF9F3;}
+  .src{ color:var(--muted); font-size:12px; }
+
+  .stats-grid{ display:grid; grid-template-columns: 1.3fr 1fr; gap:20px; }
+  @media (max-width: 760px){ .stats-grid{ grid-template-columns: 1fr; } }
+
+  .freq-row{ display:flex; align-items:center; gap:10px; margin-bottom:7px; }
+  .freq-num{ width:26px; font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--muted); text-align:right;}
+  .freq-bar-bg{ flex:1; background:var(--panel-2); border-radius:4px; height:9px; overflow:hidden; }
+  .freq-bar{ height:100%; background: linear-gradient(90deg, var(--teal-dim), var(--gold)); }
+  .freq-count{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--muted); width:18px; }
+
+  .chip-list{ display:flex; gap:8px; flex-wrap:wrap; }
+  .chip{ font-family:'IBM Plex Mono', monospace; font-size:12.5px; padding:5px 10px; border-radius:20px; border:1px solid var(--line); color:var(--muted); }
+  .chip.hot{ border-color: var(--gold-dim); color: var(--gold); }
+  .chip.cold{ border-color: var(--red-cold); color: #9DB6DE; }
+  .chip.absent{ border-color:#3a3f2e; color:#c9d17a; }
+
+  .add-form{ display:grid; grid-template-columns: 130px repeat(6, 60px) 60px auto; gap:8px; align-items:end; }
+  @media (max-width: 760px){ .add-form{ grid-template-columns: repeat(2, 1fr); } }
+  .add-form input[type=number]{ width:100%; background: var(--panel-2); border:1px solid var(--line); color:var(--text); padding:9px 8px; border-radius:6px; font-family:'IBM Plex Mono', monospace; font-size:13px;}
+  .add-form .field label{ margin-bottom:0; }
+  .manual-note{ font-size:12px; color:var(--muted); margin-top:10px; }
+
+  .empty{ color:var(--muted); font-size:13px; padding: 20px 0; text-align:center; }
+  .caveat{ font-size:12.5px; color: var(--muted); line-height:1.6; border-left:2px solid var(--gold-dim); padding-left:12px; margin-top:14px;}
+  footer{ text-align:center; color:var(--muted); font-size:12px; margin-top: 30px; font-family:'IBM Plex Mono', monospace;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <p class="brand-eyebrow">Draw Archive · 6/42</p>
+      <h1>Lebanese LOTO Archive</h1>
+    </div>
+    <div class="meta" id="metaInfo">loading dataset…</div>
+  </header>
+
+  <section class="panel">
+    <h2>Select date range <span class="tag">calendar</span></h2>
+    <div class="controls">
+      <div class="field">
+        <label for="fromDate">From</label>
+        <input type="date" id="fromDate">
+      </div>
+      <div class="field">
+        <label for="toDate">To</label>
+        <input type="date" id="toDate">
+      </div>
+      <button class="primary" id="loadBtn">Show draws</button>
+      <div class="quick-btns">
+        <button class="ghost" data-range="30">Last 30 days</button>
+        <button class="ghost" data-range="180">Last 6 months</button>
+        <button class="ghost" data-range="365">Last year</button>
+        <button class="ghost" data-range="all">All time</button>
+      </div>
+    </div>
+    <div class="summary-line" id="summaryLine"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Draws in range</h2>
+    <div id="tableWrap"><p class="empty">Pick a range and click "Show draws".</p></div>
+  </section>
+
+  <section class="panel">
+    <h2>Number frequency <span class="tag">this range</span></h2>
+    <div class="stats-grid">
+      <div>
+        <div id="freqChart"></div>
+      </div>
+      <div>
+        <p style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-family:'IBM Plex Mono',monospace;margin:0 0 8px;">Hot (most drawn)</p>
+        <div class="chip-list" id="hotChips"></div>
+        <p style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-family:'IBM Plex Mono',monospace;margin:18px 0 8px;">Cold (least drawn)</p>
+        <div class="chip-list" id="coldChips"></div>
+        <p style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-family:'IBM Plex Mono',monospace;margin:18px 0 8px;">Never drawn in range</p>
+        <div class="chip-list" id="absentChips"></div>
+      </div>
+    </div>
+    <p class="caveat">Each LOTO draw is an independent random event — historical frequency, however calculated, has no predictive effect on future draws. These figures describe what already happened, not what's likely to happen next.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Add a draw manually <span class="tag">local only</span></h2>
+    <div class="add-form">
+      <div class="field"><label>Date</label><input type="date" id="mDate"></div>
+      <div class="field"><label>N1</label><input type="number" min="1" max="42" class="mNum"></div>
+      <div class="field"><label>N2</label><input type="number" min="1" max="42" class="mNum"></div>
+      <div class="field"><label>N3</label><input type="number" min="1" max="42" class="mNum"></div>
+      <div class="field"><label>N4</label><input type="number" min="1" max="42" class="mNum"></div>
+      <div class="field"><label>N5</label><input type="number" min="1" max="42" class="mNum"></div>
+      <div class="field"><label>N6</label><input type="number" min="1" max="42" class="mNum"></div>
+      <div class="field"><label>Bonus</label><input type="number" min="1" max="42" id="mBonus"></div>
+      <button class="primary" id="addDrawBtn">Add draw</button>
+    </div>
+    <p class="manual-note" id="manualCount"></p>
+    <div class="controls" style="margin-top:12px;">
+      <button id="exportBtn">Export merged dataset (.json)</button>
+      <button id="clearManualBtn">Clear manual draws</button>
+    </div>
+    <p class="manual-note">Manually added draws are saved in this browser only. Use "Export merged dataset" to download an updated <code>data.json</code> you can commit back to the repo.</p>
+  </section>
+
+  <footer>Unofficial archive tool · data sourced from public LOTO result trackers, not La Libanaise des Jeux</footer>
+</div>
+
+<script>
+const STORAGE_KEY = "loto_manual_draws_v1";
+let baseDraws = [];
+let allDraws = [];
+
+function loadManual(){
+  try{ return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
+  catch(e){ return []; }
+}
+function saveManual(list){ localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); }
+
+function mergeDraws(){
+  const manual = loadManual();
+  const byDate = {};
+  [...baseDraws, ...manual].forEach(d => byDate[d.date] = d); // manual overrides base on same date
+  allDraws = Object.values(byDate).sort((a,b) => b.date.localeCompare(a.date));
+  renderManualCount(manual.length);
+}
+
+function renderManualCount(n){
+  document.getElementById('manualCount').textContent =
+    n === 0 ? "No manually-added draws yet." : `${n} manually-added draw(s) stored in this browser.`;
+}
+
+async function init(){
+  try{
+    const res = await fetch('data.json');
+    const json = await res.json();
+    baseDraws = json.draws || [];
+    document.getElementById('metaInfo').textContent =
+      `${baseDraws.length} baked-in draws · updated ${json.meta?.lastUpdated || '—'}`;
+  }catch(e){
+    document.getElementById('metaInfo').textContent = 'Could not load data.json';
+  }
+  mergeDraws();
+
+  // default range: last 6 months
+  const to = new Date();
+  const from = new Date(); from.setDate(from.getDate() - 180);
+  document.getElementById('toDate').value = to.toISOString().slice(0,10);
+  document.getElementById('fromDate').value = from.toISOString().slice(0,10);
+  runQuery();
+}
+
+function runQuery(){
+  const from = document.getElementById('fromDate').value;
+  const to = document.getElementById('toDate').value;
+  const filtered = allDraws.filter(d => (!from || d.date >= from) && (!to || d.date <= to));
+  renderTable(filtered);
+  renderStats(filtered);
+  document.getElementById('summaryLine').innerHTML =
+    `<b>${filtered.length}</b> draws found between <b>${from || '…'}</b> and <b>${to || '…'}</b>`;
+}
+
+function ballHtml(n, cls=''){ return `<div class="ball ${cls}">${n}</div>`; }
+
+function renderTable(list){
+  const wrap = document.getElementById('tableWrap');
+  if(list.length === 0){ wrap.innerHTML = '<p class="empty">No draws found in this range.</p>'; return; }
+  let rows = list.map(d => `
+    <tr>
+      <td style="font-family:'IBM Plex Mono',monospace;white-space:nowrap;">${d.date} <span class="src">${d.day||''}</span></td>
+      <td><div class="balls">${d.numbers.map(n=>ballHtml(n)).join('')}${ballHtml(d.bonus,'bonus')}</div></td>
+    </tr>
+  `).join('');
+  wrap.innerHTML = `<table><thead><tr><th>Date</th><th>Numbers (bonus in teal)</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderStats(list){
+  const freq = {}; for(let i=1;i<=42;i++) freq[i]=0;
+  list.forEach(d => d.numbers.forEach(n => freq[n] = (freq[n]||0)+1));
+  const max = Math.max(1, ...Object.values(freq));
+
+  let chartHtml = '';
+  for(let n=1;n<=42;n++){
+    const pct = (freq[n]/max)*100;
+    chartHtml += `
+      <div class="freq-row">
+        <div class="freq-num">${n}</div>
+        <div class="freq-bar-bg"><div class="freq-bar" style="width:${pct}%"></div></div>
+        <div class="freq-count">${freq[n]}</div>
+      </div>`;
+  }
+  document.getElementById('freqChart').innerHTML = chartHtml;
+
+  const entries = Object.entries(freq).map(([n,c])=>({n:+n,c}));
+  const present = entries.filter(e=>e.c>0);
+  const hot = [...present].sort((a,b)=>b.c-a.c).slice(0,7);
+  const cold = [...present].sort((a,b)=>a.c-b.c).slice(0,7);
+  const absent = entries.filter(e=>e.c===0).map(e=>e.n);
+
+  document.getElementById('hotChips').innerHTML = hot.map(e=>`<span class="chip hot">${e.n} · ${e.c}×</span>`).join('') || '<span class="chip">—</span>';
+  document.getElementById('coldChips').innerHTML = cold.map(e=>`<span class="chip cold">${e.n} · ${e.c}×</span>`).join('') || '<span class="chip">—</span>';
+  document.getElementById('absentChips').innerHTML = absent.length
+    ? absent.map(n=>`<span class="chip absent">${n}</span>`).join('')
+    : '<span class="chip">None — every number appeared</span>';
+}
+
+document.getElementById('loadBtn').addEventListener('click', runQuery);
+
+document.querySelectorAll('[data-range]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const val = btn.dataset.range;
+    const to = new Date();
+    document.getElementById('toDate').value = to.toISOString().slice(0,10);
+    if(val === 'all'){
+      const earliest = allDraws.reduce((min,d)=> d.date < min ? d.date : min, allDraws[0]?.date || to.toISOString().slice(0,10));
+      document.getElementById('fromDate').value = earliest;
+    } else {
+      const from = new Date(); from.setDate(from.getDate() - parseInt(val,10));
+      document.getElementById('fromDate').value = from.toISOString().slice(0,10);
+    }
+    runQuery();
+  });
+});
+
+document.getElementById('addDrawBtn').addEventListener('click', ()=>{
+  const dateVal = document.getElementById('mDate').value;
+  const nums = [...document.querySelectorAll('.mNum')].map(i=>parseInt(i.value,10));
+  const bonus = parseInt(document.getElementById('mBonus').value,10);
+  if(!dateVal || nums.some(isNaN) || nums.length!==6 || isNaN(bonus)){
+    alert('Fill in the date, all 6 numbers, and the bonus number.');
+    return;
+  }
+  if(nums.some(n=>n<1||n>42) || bonus<1 || bonus>42){
+    alert('Numbers must be between 1 and 42.');
+    return;
+  }
+  const manual = loadManual();
+  const d = new Date(dateVal);
+  const day = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getUTCDay()];
+  manual.push({ date: dateVal, day, numbers: nums, bonus });
+  saveManual(manual);
+  mergeDraws();
+  runQuery();
+  document.getElementById('mDate').value='';
+  document.querySelectorAll('.mNum').forEach(i=>i.value='');
+  document.getElementById('mBonus').value='';
+});
+
+document.getElementById('clearManualBtn').addEventListener('click', ()=>{
+  if(confirm('Remove all manually-added draws stored in this browser?')){
+    localStorage.removeItem(STORAGE_KEY);
+    mergeDraws();
+    runQuery();
+  }
+});
+
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const payload = {
+    meta: { game: "Lebanese LOTO 6/42", lastUpdated: new Date().toISOString().slice(0,10),
+            note: "Merged export: baked-in data.json + manually-added draws" },
+    draws: allDraws
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'data.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+init();
+</script>
+</body>
+</html>
