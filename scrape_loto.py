@@ -177,7 +177,11 @@ def scrape_month(driver, yyyymm, month_select_name, game_select_name, wait_secs)
     if not month_sel:
         log(f"  ! {yyyymm}: couldn't find the month dropdown (try --no-headless to inspect)")
         return []
-    month_el = month_sel._el
+    if month_el is None:  # came from find_select(); recover the underlying element
+        month_el = getattr(month_sel, "_el", None)
+        if month_el is None:
+            log(f"  ! {yyyymm}: couldn't resolve the month dropdown element")
+            return []
     try:
         month_sel.select_by_value(yyyymm)
     except Exception:
@@ -191,18 +195,25 @@ def scrape_month(driver, yyyymm, month_select_name, game_select_name, wait_secs)
         old_table = driver.find_element(By.CSS_SELECTOR, "table")
     except NoSuchElementException:
         pass
+    # The filter form is method=post, so URL query params don't work -- it must be
+    # submitted. Submit the form that actually CONTAINS the month dropdown; never just
+    # grab the first button on the page (the header's "Sign in" button lives in the DOM
+    # too, and clicking that logs you in instead of searching).
     try:
         form = month_el.find_element(By.XPATH, "./ancestor::form[1]")
-        submit_btns = form.find_elements(
-            By.CSS_SELECTOR, "input[type=submit], button[type=submit], button"
-        )
-        if submit_btns:
-            driver.execute_script("arguments[0].click();", submit_btns[0])
-        else:
-            form.submit()
     except Exception as e:
-        log(f"  ! {yyyymm}: couldn't submit the filter form: {e}")
+        log(f"  ! {yyyymm}: couldn't find the filter form: {e}")
         return []
+    try:
+        form.submit()
+    except Exception:
+        # Fallback: click the form's own submit control ("Search Numbers").
+        try:
+            btn = form.find_element(By.CSS_SELECTOR, "input[type=submit]")
+            driver.execute_script("arguments[0].click();", btn)
+        except Exception as e:
+            log(f"  ! {yyyymm}: couldn't submit the filter form: {e}")
+            return []
 
     # Wait for the results table to reload with the filtered month.
     if old_table is not None:
