@@ -155,36 +155,66 @@ def scrape_month(driver, yyyymm, month_select_name, game_select_name, wait_secs)
         log(f"  ! {yyyymm}: no <select> appeared within {wait_secs}s")
         return []
 
+    # Game filter -> Loto (option value is "Loto").
     game_sel = find_select(driver, game_select_name, "game")
     if game_sel:
-        for label in ("Loto", "Loto Libanais", "LOTO"):
+        for how in (game_sel.select_by_value, game_sel.select_by_visible_text):
             try:
-                game_sel.select_by_visible_text(label)
+                how("Loto")
                 break
             except Exception:
                 continue
 
-    month_sel = find_select(driver, month_select_name, "month")
+    # Month filter (option values look like "2026-08").
+    month_el = None
+    for how in (By.ID, By.NAME):
+        try:
+            month_el = driver.find_element(how, month_select_name)
+            break
+        except NoSuchElementException:
+            continue
+    month_sel = Select(month_el) if month_el else find_select(driver, None, "month")
     if not month_sel:
         log(f"  ! {yyyymm}: couldn't find the month dropdown (try --no-headless to inspect)")
         return []
+    month_el = month_sel._el
     try:
         month_sel.select_by_value(yyyymm)
     except Exception:
-        # Some sites label months as "August 2026" rather than "2026-08".
-        y, mth = yyyymm.split("-")
-        label = f"{list(MONTHS.keys())[int(mth) - 1]}"  # short month name
-        matched = False
-        for opt in month_sel.options:
-            if y in opt.text and (label in opt.text or f"-{mth}" in (opt.get_attribute("value") or "")):
-                opt.click()
-                matched = True
-                break
-        if not matched:
-            log(f"  ! {yyyymm}: no matching month option")
-            return []
+        log(f"  ! {yyyymm}: no matching month option (value {yyyymm!r})")
+        return []
 
-    time.sleep(1.5)  # let the AJAX table re-render
+    # THE KEY STEP: submit the filter form. Selecting the dropdown alone does nothing;
+    # the page only re-renders for the chosen month after the form is submitted.
+    old_table = None
+    try:
+        old_table = driver.find_element(By.CSS_SELECTOR, "table")
+    except NoSuchElementException:
+        pass
+    try:
+        form = month_el.find_element(By.XPATH, "./ancestor::form[1]")
+        submit_btns = form.find_elements(
+            By.CSS_SELECTOR, "input[type=submit], button[type=submit], button"
+        )
+        if submit_btns:
+            driver.execute_script("arguments[0].click();", submit_btns[0])
+        else:
+            form.submit()
+    except Exception as e:
+        log(f"  ! {yyyymm}: couldn't submit the filter form: {e}")
+        return []
+
+    # Wait for the results table to reload with the filtered month.
+    if old_table is not None:
+        try:
+            wait.until(EC.staleness_of(old_table))
+        except TimeoutException:
+            pass
+    try:
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table tr")))
+    except TimeoutException:
+        pass
+    time.sleep(0.8)
 
     draws, seen = [], set()
     for row in driver.find_elements(By.CSS_SELECTOR, "table tr, tr"):
@@ -295,8 +325,8 @@ def main():
     ap = argparse.ArgumentParser(description="Backfill data.json with Lebanese LOTO draws.")
     ap.add_argument("--start", default="2020-03", help="YYYY-MM to start from (default: 2020-03, the gap start)")
     ap.add_argument("--end", default=date.today().strftime("%Y-%m"), help="YYYY-MM to end at (default: current month)")
-    ap.add_argument("--month-select", default="month", help="name/id of the month <select> (auto-detected if wrong)")
-    ap.add_argument("--game-select", default="game", help="name/id of the game <select> (auto-detected if wrong)")
+    ap.add_argument("--month-select", default="LotteryDate", help="id/name of the month <select> (auto-detected if wrong)")
+    ap.add_argument("--game-select", default="LotteryName", help="id/name of the game <select> (auto-detected if wrong)")
     ap.add_argument("--wait", type=int, default=15, help="seconds to wait for page elements")
     ap.add_argument("--retries", type=int, default=2, help="retries per month on error")
     ap.add_argument("--skip-existing", action="store_true", help="skip months that already have draws in data.json")
