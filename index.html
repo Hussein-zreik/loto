@@ -142,6 +142,19 @@
   .chip-key.inc{ border-color:var(--teal); color:var(--teal); }
   .chip-key.exc{ border-color:#8C4B4B; color:#C98B8B; }
 
+  .switch{ display:inline-flex; align-items:center; gap:9px; cursor:pointer; font-size:14px; }
+  .switch input{ accent-color:var(--gold); width:16px; height:16px; cursor:pointer; }
+  .pool-grid{ display:grid; grid-template-columns: repeat(auto-fill,minmax(44px,1fr)); gap:6px; }
+  .pool-n{ text-align:center; padding:8px 0; border-radius:6px; border:1px solid var(--line);
+           background:var(--panel-2); color:var(--muted); font-family:'IBM Plex Mono',monospace;
+           font-size:13px; cursor:pointer; user-select:none; transition:.12s; }
+  .pool-n:hover{ border-color:var(--muted); }
+  .pool-n.on{ background:var(--teal-dim); border-color:var(--teal); color:#DFF9F3; font-weight:600; }
+  .sel{ width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text);
+        padding:8px 9px; border-radius:6px; font-family:'IBM Plex Mono',monospace; font-size:13px; }
+  .guar{ background:var(--panel-2); border-left:2px solid var(--teal); border-radius:0 7px 7px 0;
+         padding:12px 14px; margin:16px 0 4px; font-size:13.5px; line-height:1.65; }
+  .guar b{ color:var(--teal); }
   .count-bar{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin:18px 0 4px;
               padding-bottom:10px; border-bottom:1px solid var(--line); }
   .count-big{ font-family:'Space Grotesk',sans-serif; font-size:26px; color:var(--gold); }
@@ -335,6 +348,54 @@
   </section>
 
   <section class="panel">
+    <h2>Wheeling system <span class="tag">optional</span></h2>
+
+    <label class="switch"><input type="checkbox" id="wheelOn"> <span>Use a wheel</span></label>
+    <p class="manual-note" style="margin-top:6px;">Off by default. A wheel plays one pool of numbers across
+    several tickets so that <i>if</i> enough of your numbers are drawn, a prize is mathematically guaranteed.
+    It does not improve your odds — 84 wheeled tickets and 84 random tickets both give exactly
+    84 chances in 5,245,786.</p>
+
+    <div id="wheelBody" style="display:none;">
+      <p style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-family:'IBM Plex Mono',monospace;margin:18px 0 8px;">Your pool — pick 7 to 15 numbers</p>
+      <div id="poolGrid" class="pool-grid"></div>
+      <div class="controls" style="margin-top:10px;">
+        <button class="ghost" id="poolFromHc">Use hot/cold includes</button>
+        <button class="ghost" id="poolClear">Clear pool</button>
+        <span class="opt-n" id="poolCount" style="align-self:center;">0 selected</span>
+      </div>
+
+      <div class="opt-grid" style="margin-top:16px;">
+        <div class="opt">
+          <div class="opt-h">Wheel type</div>
+          <select id="wheelType" class="sel">
+            <option value="full">Full wheel — every combination</option>
+            <option value="abbr">Abbreviated — fewer tickets, weaker guarantee</option>
+          </select>
+          <div class="opt-n">A full wheel guarantees the jackpot if all 6 land in your pool.</div>
+        </div>
+        <div class="opt" id="abbrBox" style="display:none;">
+          <div class="opt-h">Guarantee</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <span class="opt-n" style="margin:0;">at least a</span>
+            <select id="wheelM" class="sel" style="width:auto;"><option>3</option><option selected>4</option><option>5</option></select>
+            <span class="opt-n" style="margin:0;">-match if</span>
+            <select id="wheelT" class="sel" style="width:auto;"><option>4</option><option>5</option><option selected>6</option></select>
+            <span class="opt-n" style="margin:0;">of my numbers are drawn</span>
+          </div>
+          <div class="opt-n">Computed as a covering design and then verified exhaustively.</div>
+        </div>
+      </div>
+
+      <div class="controls" style="margin-top:14px;">
+        <button class="primary" id="wheelBuild">Build wheel</button>
+        <button class="ghost" id="wheelCsv">Export CSV</button>
+      </div>
+      <div id="wheelOut"></div>
+    </div>
+  </section>
+
+  <section class="panel">
     <h2>Add a draw manually <span class="tag">local only</span></h2>
     <div class="add-form">
       <div class="field"><label>Date</label><input type="date" id="mDate"></div>
@@ -395,6 +456,7 @@ async function init(){
   mergeDraws();
   resetRules();
   renderHotCold();
+  renderPool();
 
   // default range: last 6 months
   const to = new Date();
@@ -960,6 +1022,160 @@ document.getElementById('hcAllBtn').addEventListener('click', ()=>{
 document.getElementById('hcClearBtn').addEventListener('click', ()=>{
   Object.keys(hcState).forEach(k=> delete hcState[k]);
   renderHotCold();
+});
+
+/* ---------------------------------------------------------------------------
+   WHEELING SYSTEM (optional)
+   A full wheel plays every 6-combination of a chosen pool. An abbreviated
+   wheel is a covering design: the fewest tickets such that if t of the pool
+   are drawn, some ticket matches m. Built greedily, then VERIFIED exhaustively
+   -- an unverified guarantee would be worse than no guarantee at all.
+   --------------------------------------------------------------------------- */
+const pool = new Set();
+let wheelTickets = [];
+
+const popcount = m => { let n=0; while(m){ m &= m-1; n++; } return n; };
+
+function idxCombos(n, k){
+  const out = [], c = [];
+  (function rec(start, depth){
+    if(depth === k){ let m = 0; for(const i of c) m |= (1<<i); out.push(m); return; }
+    for(let i=start;i<n;i++){ c.push(i); rec(i+1, depth+1); c.pop(); }
+  })(0,0);
+  return out;
+}
+
+function buildCovering(n, t, m){
+  const tickets = idxCombos(n, 6);
+  let uncovered = idxCombos(n, t);
+  const chosen = [];
+  while(uncovered.length){
+    let best = -1, bestCount = -1;
+    for(const tk of tickets){
+      let c = 0;
+      for(const u of uncovered) if(popcount(tk & u) >= m) c++;
+      if(c > bestCount){ bestCount = c; best = tk; }
+    }
+    if(bestCount <= 0) return null;
+    chosen.push(best);
+    uncovered = uncovered.filter(u => popcount(best & u) < m);
+  }
+  return chosen;
+}
+
+function verifyCovering(chosen, n, t, m){
+  for(const u of idxCombos(n, t)){
+    let ok = false;
+    for(const tk of chosen){ if(popcount(tk & u) >= m){ ok = true; break; } }
+    if(!ok) return false;
+  }
+  return true;
+}
+
+function hyperAtLeast(n, t){           // P(at least t of the 6 drawn are in a pool of n)
+  const C = (a,b)=>{ if(b<0||b>a) return 0; let r=1; for(let i=0;i<b;i++) r = r*(a-i)/(i+1); return r; };
+  let p = 0;
+  for(let k=t;k<=6;k++) p += C(n,k)*C(42-n,6-k);
+  return p / C(42,6);
+}
+
+function renderPool(){
+  document.getElementById('poolGrid').innerHTML =
+    Array.from({length:42},(_,i)=>i+1).map(n=>
+      `<div class="pool-n ${pool.has(n)?'on':''}" data-pool="${n}">${n}</div>`).join('');
+  const c = pool.size;
+  document.getElementById('poolCount').textContent =
+    `${c} selected` + (c<7 ? ' — need at least 7' : c>15 ? ' — 15 maximum' : '');
+  document.querySelectorAll('[data-pool]').forEach(el=>
+    el.addEventListener('click', ()=>{
+      const n = +el.dataset.pool;
+      pool.has(n) ? pool.delete(n) : pool.add(n);
+      renderPool();
+    }));
+}
+
+document.getElementById('wheelOn').addEventListener('change', e=>{
+  document.getElementById('wheelBody').style.display = e.target.checked ? 'block' : 'none';
+});
+document.getElementById('wheelType').addEventListener('change', e=>{
+  document.getElementById('abbrBox').style.display = e.target.value === 'abbr' ? 'block' : 'none';
+});
+document.getElementById('poolClear').addEventListener('click', ()=>{ pool.clear(); renderPool(); });
+document.getElementById('poolFromHc').addEventListener('click', ()=>{
+  Object.entries(hcState).forEach(([n,v])=>{ if(v==='inc') pool.add(+n); });
+  renderPool();
+});
+
+document.getElementById('wheelBuild').addEventListener('click', ()=>{
+  const out = document.getElementById('wheelOut');
+  const nums = [...pool].sort((a,b)=>a-b);
+  const n = nums.length;
+  if(n < 7 || n > 15){
+    out.innerHTML = `<p class="warn">Pick between 7 and 15 numbers for the pool (you have ${n}).</p>`;
+    return;
+  }
+  const type = document.getElementById('wheelType').value;
+  const btn = document.getElementById('wheelBuild');
+  const label = btn.textContent;
+  btn.textContent = 'Building…'; btn.disabled = true;
+
+  setTimeout(()=>{
+    let masks, t, m, verified = true;
+    if(type === 'full'){
+      masks = idxCombos(n, 6); t = 6; m = 6;
+    } else {
+      t = +document.getElementById('wheelT').value;
+      m = +document.getElementById('wheelM').value;
+      if(m > t){
+        out.innerHTML = `<p class="warn">A ${m}-match can't be guaranteed from only ${t} of your numbers being drawn — the match can never exceed ${t}.</p>`;
+        btn.textContent = label; btn.disabled = false; return;
+      }
+      masks = buildCovering(n, t, m);
+      if(!masks){
+        out.innerHTML = `<p class="warn">That guarantee isn't achievable with this pool.</p>`;
+        btn.textContent = label; btn.disabled = false; return;
+      }
+      verified = verifyCovering(masks, n, t, m);
+    }
+
+    wheelTickets = masks.map(mask=>{
+      const tk = [];
+      for(let i=0;i<n;i++) if(mask & (1<<i)) tk.push(nums[i]);
+      return tk;
+    });
+
+    const full = idxCombos(n,6).length;
+    const pCond = hyperAtLeast(n, t);
+    const saving = type === 'abbr' ? Math.round(100 - wheelTickets.length/full*100) : 0;
+
+    const rows = wheelTickets.map((tk,i)=>
+      `<div class="res-row"><div class="res-idx">#${i+1}</div>
+        <div class="balls">${tk.map(x=>ballHtml(x)).join('')}</div></div>`).join('');
+
+    out.innerHTML = `
+      <div class="guar">
+        <b>${wheelTickets.length.toLocaleString()} ticket${wheelTickets.length===1?'':'s'}</b>
+        from your ${n} numbers${type==='abbr' ? ` — ${saving}% fewer than the ${full.toLocaleString()}-ticket full wheel` : ''}.<br>
+        Guarantee: if <b>${t}</b> of your ${n} numbers are drawn, at least one ticket matches <b>${m}</b>.
+        ${verified ? '<span style="color:var(--teal)">✓ verified exhaustively</span>'
+                   : '<span style="color:#E2B36A">⚠ could not verify</span>'}<br>
+        That condition happens about <b>1 in ${Math.round(1/pCond).toLocaleString()}</b> draws.<br>
+        <span style="color:var(--muted)">Your chance of the jackpot is
+        ${wheelTickets.length.toLocaleString()} in 5,245,786 — the same as ${wheelTickets.length.toLocaleString()}
+        random tickets. The wheel changes the shape of your wins, not their expected value.</span>
+      </div>
+      ${rows}`;
+    btn.textContent = label; btn.disabled = false;
+  }, 20);
+});
+
+document.getElementById('wheelCsv').addEventListener('click', ()=>{
+  if(!wheelTickets.length){ alert('Build a wheel first.'); return; }
+  const csv = 'n1,n2,n3,n4,n5,n6\n' + wheelTickets.map(t=>t.join(',')).join('\n') + '\n';
+  const url = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  const a = document.createElement('a');
+  a.href = url; a.download = `loto_wheel_${wheelTickets.length}_tickets.csv`; a.click();
+  URL.revokeObjectURL(url);
 });
 
 document.getElementById('scoreBtn').addEventListener('click', ()=>{
