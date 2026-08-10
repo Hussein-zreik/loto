@@ -126,6 +126,9 @@
       padding:8px 9px; border-radius:6px; font-family:'IBM Plex Mono',monospace; font-size:13px; }
   .opt-n{ font-size:11.5px; color:var(--muted); margin-top:7px; line-height:1.5; }
 
+  .hc-dates{ display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
+  .hc-dates .field label{ margin-bottom:2px; }
+  .hc-dates input[type=date]{ background:var(--bg); }
   .hc-label{ display:inline-block; width:64px; font-family:'IBM Plex Mono',monospace; font-size:11px;
              color:var(--muted); text-transform:uppercase; letter-spacing:.06em; vertical-align:middle; }
   .hc{ cursor:pointer; user-select:none; font-family:'IBM Plex Mono',monospace; font-size:12.5px;
@@ -275,13 +278,34 @@
 
     <div class="opt" style="margin-top:10px;">
       <div class="opt-h">3 · Hot / cold numbers</div>
-      <div class="opt-n" style="margin-bottom:8px;">Click a number to cycle:
+      <div class="opt-n" style="margin-bottom:10px;">Click a number to cycle:
         <span class="chip-key neutral">neutral</span> →
         <span class="chip-key inc">must include</span> →
-        <span class="chip-key exc">must exclude</span>.
-        Frequencies are live from all <span id="hcTotal">—</span> archived draws.</div>
+        <span class="chip-key exc">must exclude</span>.</div>
+
+      <div class="hc-dates">
+        <div class="field"><label for="hcFrom">Count from</label><input type="date" id="hcFrom"></div>
+        <div class="field"><label for="hcTo">Count to</label><input type="date" id="hcTo"></div>
+        <div class="quick-btns">
+          <button class="ghost" data-hcr="30">Last 30 draws</button>
+          <button class="ghost" data-hcr="180">6 months</button>
+          <button class="ghost" data-hcr="365">1 year</button>
+          <button class="ghost" data-hcr="1095">3 years</button>
+          <button class="ghost" data-hcr="all">All time</button>
+        </div>
+      </div>
+      <div class="opt-n" id="hcWindow" style="margin:8px 0 10px;">—</div>
+
       <div style="margin-bottom:6px;"><span class="hc-label">Hottest</span><span id="hotList" class="chip-list"></span></div>
       <div><span class="hc-label">Coldest</span><span id="coldList" class="chip-list"></span></div>
+      <div id="hcAllWrap" style="display:none;margin-top:8px;"><span class="hc-label">All 1–42</span><span id="allList" class="chip-list"></span></div>
+      <div id="hcSelWrap" style="display:none;margin-top:8px;"><span class="hc-label">Selected</span><span id="selList" class="chip-list"></span></div>
+
+      <div class="controls" style="margin-top:10px;">
+        <button class="ghost" id="hcAllBtn">Show all 42</button>
+        <button class="ghost" id="hcClearBtn">Clear selection</button>
+      </div>
+
       <div class="opt-n" id="hcSummary" style="margin-top:8px;">No numbers selected.</div>
       <div class="opt-n" style="margin-top:6px;opacity:.8;">Reminder: these draws test as statistically
         fair, so "hot" and "cold" have no predictive value — this filter is here because you asked for
@@ -824,7 +848,7 @@ document.getElementById('csvBtn').addEventListener('click', ()=>{
 });
 
 document.getElementById('optResetBtn').addEventListener('click', ()=>{
-  ['optSum','optSpread','optOdd','optEven'].forEach(id=> document.getElementById(id).value='');
+  ['optSum','optSpread','optOdd','optEven','hcFrom','hcTo'].forEach(id=> document.getElementById(id).value='');
   Object.keys(hcState).forEach(k=> delete hcState[k]);
   renderHotCold();
   document.getElementById('genOut').innerHTML = '';
@@ -837,19 +861,61 @@ document.getElementById('rulesToggle').addEventListener('click', ()=>{
   document.getElementById('rulesToggle').textContent = open ? 'Extra rules ▾' : 'Extra rules ▴';
 });
 
-/* --- hot/cold picker ------------------------------------------------------- */
+/* --- hot/cold picker, scoped to a date window ------------------------------ */
+let hcShowAll = false;
+
+function hcDraws(){
+  const from = document.getElementById('hcFrom').value;
+  const to   = document.getElementById('hcTo').value;
+  return allDraws.filter(d => (!from || d.date >= from) && (!to || d.date <= to));
+}
+
 function renderHotCold(){
+  const win = hcDraws();
   const freq = {}; for(let i=1;i<=42;i++) freq[i]=0;
-  allDraws.forEach(d=> d.numbers.forEach(n=> freq[n]++));
-  const ranked = Object.entries(freq).map(([n,c])=>({n:+n,c})).sort((a,b)=>b.c-a.c);
-  document.getElementById('hcTotal').textContent = allDraws.length.toLocaleString();
+  win.forEach(d=> d.numbers.forEach(n=> freq[n]++));
+  const ranked = Object.entries(freq).map(([n,c])=>({n:+n,c})).sort((a,b)=> b.c-a.c || a.n-b.n);
+
+  // Expected count and 1 s.d. of pure chance, so the reader can see the noise floor.
+  const exp = win.length * 6 / 42;
+  const sd  = Math.sqrt(win.length * (6/42) * (1 - 6/42));
+  const hi  = ranked.length ? ranked[0].c : 0, lo = ranked.length ? ranked[ranked.length-1].c : 0;
+  const spreadSd = sd > 0 ? ((hi - lo) / sd) : 0;
+
+  const winEl = document.getElementById('hcWindow');
+  if(win.length === 0){
+    winEl.innerHTML = '<span style="color:#E2B36A">No draws in this window — widen the dates.</span>';
+  } else {
+    const dates = win.map(d=>d.date).sort();
+    let note = '';
+    if(win.length < 60){
+      note = ` <span style="color:#E2B36A">Small window — with only ${win.length} draws, chance alone
+               swings counts by ±${sd.toFixed(1)}, so this ranking is mostly noise.</span>`;
+    }
+    winEl.innerHTML = `<b>${win.length.toLocaleString()}</b> draws · ${dates[0]} → ${dates[dates.length-1]}
+      · expected <b>${exp.toFixed(1)}×</b> per number, chance spread ±${sd.toFixed(1)}
+      (observed range ${lo}–${hi} = ${spreadSd.toFixed(1)} s.d.)${note}`;
+  }
 
   const chip = e => `<span class="hc ${hcState[e.n]||''}" data-hc="${e.n}">${e.n} <small>${e.c}×</small></span>`;
   document.getElementById('hotList').innerHTML  = ranked.slice(0,12).map(chip).join('');
   document.getElementById('coldList').innerHTML = ranked.slice(-12).reverse().map(chip).join('');
 
+  document.getElementById('hcAllWrap').style.display = hcShowAll ? 'block' : 'none';
+  if(hcShowAll){
+    document.getElementById('allList').innerHTML =
+      Array.from({length:42},(_,i)=>({n:i+1,c:freq[i+1]})).map(chip).join('');
+  }
+
+  // Always show selected numbers, so a pick stays clickable even when the window
+  // moves it out of the hot/cold lists.
   const inc = Object.keys(hcState).filter(k=>hcState[k]==='inc').map(Number).sort((a,b)=>a-b);
   const exc = Object.keys(hcState).filter(k=>hcState[k]==='exc').map(Number).sort((a,b)=>a-b);
+  const sel = [...inc, ...exc].sort((a,b)=>a-b);
+  document.getElementById('hcSelWrap').style.display = sel.length ? 'block' : 'none';
+  if(sel.length){
+    document.getElementById('selList').innerHTML = sel.map(n=>chip({n, c:freq[n]})).join('');
+  }
   document.getElementById('hcSummary').innerHTML =
     (inc.length || exc.length)
       ? `Must include: <b style="color:var(--teal)">${inc.join(', ')||'—'}</b> · Must exclude: <b style="color:#C98B8B">${exc.join(', ')||'—'}</b>`
@@ -864,6 +930,37 @@ function renderHotCold(){
     });
   });
 }
+
+['hcFrom','hcTo'].forEach(id=>
+  document.getElementById(id).addEventListener('change', renderHotCold));
+
+document.querySelectorAll('[data-hcr]').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const v = b.dataset.hcr;
+    const toEl = document.getElementById('hcTo'), fromEl = document.getElementById('hcFrom');
+    if(v === 'all'){ fromEl.value = ''; toEl.value = ''; }
+    else if(v === '30'){
+      // last 30 draws by count, not by calendar
+      const dates = allDraws.map(d=>d.date).sort().slice(-30);
+      fromEl.value = dates[0] || ''; toEl.value = dates[dates.length-1] || '';
+    } else {
+      const to = new Date(); const from = new Date(); from.setDate(from.getDate() - parseInt(v,10));
+      toEl.value = to.toISOString().slice(0,10);
+      fromEl.value = from.toISOString().slice(0,10);
+    }
+    renderHotCold();
+  });
+});
+
+document.getElementById('hcAllBtn').addEventListener('click', ()=>{
+  hcShowAll = !hcShowAll;
+  document.getElementById('hcAllBtn').textContent = hcShowAll ? 'Hide all 42' : 'Show all 42';
+  renderHotCold();
+});
+document.getElementById('hcClearBtn').addEventListener('click', ()=>{
+  Object.keys(hcState).forEach(k=> delete hcState[k]);
+  renderHotCold();
+});
 
 document.getElementById('scoreBtn').addEventListener('click', ()=>{
   const nums = [...document.querySelectorAll('.sNum')].map(i=>parseInt(i.value,10));
