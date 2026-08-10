@@ -116,6 +116,40 @@
          padding:5px 6px; border-radius:5px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; }
   .rule.off label, .rule.off input[type=number]{ opacity:.45; }
   .warn{ color:#E2B36A; font-size:12.5px; margin-top:12px; line-height:1.6; }
+
+  .opt-grid{ display:grid; grid-template-columns: repeat(auto-fit,minmax(210px,1fr)); gap:10px; }
+  .opt{ background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:12px 13px; }
+  .opt-h{ font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.07em; text-transform:uppercase;
+          color:var(--gold); margin-bottom:8px; }
+  .opt input[type=text], .opt input[type=number]{
+      width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text);
+      padding:8px 9px; border-radius:6px; font-family:'IBM Plex Mono',monospace; font-size:13px; }
+  .opt-n{ font-size:11.5px; color:var(--muted); margin-top:7px; line-height:1.5; }
+
+  .hc-label{ display:inline-block; width:64px; font-family:'IBM Plex Mono',monospace; font-size:11px;
+             color:var(--muted); text-transform:uppercase; letter-spacing:.06em; vertical-align:middle; }
+  .hc{ cursor:pointer; user-select:none; font-family:'IBM Plex Mono',monospace; font-size:12.5px;
+       padding:4px 9px; border-radius:20px; border:1px solid var(--line); color:var(--muted);
+       background:var(--bg); transition:.12s; }
+  .hc:hover{ border-color:var(--muted); }
+  .hc.inc{ border-color:var(--teal); color:#DFF9F3; background:var(--teal-dim); }
+  .hc.exc{ border-color:#8C4B4B; color:#F3DADA; background:#4A2626; text-decoration:line-through; }
+  .hc small{ opacity:.65; font-size:10px; }
+  .chip-key{ padding:1px 7px; border-radius:20px; border:1px solid var(--line); font-size:11px; }
+  .chip-key.inc{ border-color:var(--teal); color:var(--teal); }
+  .chip-key.exc{ border-color:#8C4B4B; color:#C98B8B; }
+
+  .count-bar{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin:18px 0 4px;
+              padding-bottom:10px; border-bottom:1px solid var(--line); }
+  .count-big{ font-family:'Space Grotesk',sans-serif; font-size:26px; color:var(--gold); }
+  .count-sub{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted); }
+  .pager{ display:flex; gap:5px; flex-wrap:wrap; align-items:center; margin-top:14px; }
+  .pager button{ padding:6px 11px; font-size:12px; font-family:'IBM Plex Mono',monospace; }
+  .pager button.cur{ background:var(--gold); color:#1a1305; border-color:var(--gold); }
+  .pager .dots{ color:var(--muted); padding:0 3px; }
+  .res-row{ display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--line); }
+  .res-idx{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted); min-width:62px; }
+  .res-meta{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--muted); margin-left:auto; }
   .caveat{ font-size:12.5px; color: var(--muted); line-height:1.6; border-left:2px solid var(--gold-dim); padding-left:12px; margin-top:14px;}
   footer{ text-align:center; color:var(--muted); font-size:12px; margin-top: 30px; font-family:'IBM Plex Mono', monospace;}
 </style>
@@ -212,18 +246,59 @@
   <section class="panel">
     <h2>Generate numbers <span class="tag">rules engine</span></h2>
 
-    <div class="controls" style="margin-bottom:4px;">
-      <div class="field">
-        <label for="genCount">How many sets</label>
-        <input type="number" id="genCount" min="1" max="50" value="5">
+    <p class="manual-note" style="margin-top:0;">Every option is optional — leave any of them blank and
+    that filter simply isn't applied. With nothing filled in, the generator returns all 5,245,786
+    possible combinations.</p>
+
+    <div class="opt-grid">
+      <div class="opt">
+        <div class="opt-h">1 · Sum range</div>
+        <input type="text" id="optSum" placeholder="e.g. 110-130">
+        <div class="opt-n">Total of the six numbers. Possible range 21–237.</div>
       </div>
-      <button class="primary" id="genBtn">Generate</button>
-      <button class="ghost" id="rulesResetBtn">Reset rules</button>
-      <button class="ghost" id="copyBtn">Copy results</button>
+
+      <div class="opt">
+        <div class="opt-h">2 · Odd / even split</div>
+        <div style="display:flex;gap:8px;">
+          <input type="number" id="optOdd" min="0" max="6" placeholder="odd">
+          <input type="number" id="optEven" min="0" max="6" placeholder="even">
+        </div>
+        <div class="opt-n">Fill either one — the other follows (must total 6).</div>
+      </div>
+
+      <div class="opt">
+        <div class="opt-h">4 · Spread range</div>
+        <input type="text" id="optSpread" placeholder="e.g. 30-40">
+        <div class="opt-n">Highest number minus lowest. Possible range 5–41.</div>
+      </div>
     </div>
 
-    <p style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-family:'IBM Plex Mono',monospace;margin:18px 0 10px;">Rules — ★ = recommended, on by default</p>
-    <div id="rulesBox" class="rules-grid"></div>
+    <div class="opt" style="margin-top:10px;">
+      <div class="opt-h">3 · Hot / cold numbers</div>
+      <div class="opt-n" style="margin-bottom:8px;">Click a number to cycle:
+        <span class="chip-key neutral">neutral</span> →
+        <span class="chip-key inc">must include</span> →
+        <span class="chip-key exc">must exclude</span>.
+        Frequencies are live from all <span id="hcTotal">—</span> archived draws.</div>
+      <div style="margin-bottom:6px;"><span class="hc-label">Hottest</span><span id="hotList" class="chip-list"></span></div>
+      <div><span class="hc-label">Coldest</span><span id="coldList" class="chip-list"></span></div>
+      <div class="opt-n" id="hcSummary" style="margin-top:8px;">No numbers selected.</div>
+      <div class="opt-n" style="margin-top:6px;opacity:.8;">Reminder: these draws test as statistically
+        fair, so "hot" and "cold" have no predictive value — this filter is here because you asked for
+        control over which numbers appear, not because frequency predicts anything.</div>
+    </div>
+
+    <div class="controls" style="margin-top:16px;">
+      <button class="primary" id="genBtn">Generate all possibilities</button>
+      <button class="ghost" id="optResetBtn">Clear options</button>
+      <button class="ghost" id="csvBtn">Export CSV</button>
+      <button class="ghost" id="rulesToggle">Extra rules ▾</button>
+    </div>
+
+    <div id="rulesWrap" style="display:none;margin-top:14px;">
+      <p style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-family:'IBM Plex Mono',monospace;margin:0 0 10px;">Optional extra rules — all off by default</p>
+      <div id="rulesBox" class="rules-grid"></div>
+    </div>
 
     <div id="genOut"></div>
     <p class="caveat"><b>Why only the ★ rules are on.</b> Rules cost you nothing — a single ticket is
@@ -295,6 +370,7 @@ async function init(){
   }
   mergeDraws();
   resetRules();
+  renderHotCold();
 
   // default range: last 6 months
   const to = new Date();
@@ -461,12 +537,6 @@ function crowdingScore(nums){
 function scoreColor(v){ return v >= 55 ? '#D96A6A' : v >= 25 ? 'var(--gold)' : 'var(--teal)'; }
 function scoreWord(v){ return v >= 55 ? 'Crowded' : v >= 25 ? 'Moderate' : 'Uncrowded'; }
 
-function randomCombo(){
-  const pool = Array.from({length:42},(_,i)=>i+1);
-  for(let i=pool.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
-  return pool.slice(0,6).sort((a,b)=>a-b);
-}
-
 /* ---------------------------------------------------------------------------
    RULES ENGINE
    Each rule is declarative: { id, label, def (default value), on (enabled by
@@ -547,68 +617,253 @@ function renderRules(){
   });
 }
 
-function passesRules(s){
-  for(const r of RULE_DEFS){
-    const st = RULE_STATE[r.id];
-    if(st.on && !r.test(s, st.val)) return false;
-  }
-  return true;
+/* ---------------------------------------------------------------------------
+   EXHAUSTIVE GENERATOR
+   Enumerates every C(42,6) = 5,245,786 combination, keeps those matching the
+   options, stores them packed (6 bytes each) and paginates the result.
+   --------------------------------------------------------------------------- */
+const PAGE_SIZE  = 50;
+const MAX_STORE  = 2000000;   // 12 MB as Uint8Array; count stays exact beyond this
+let   store = null, storeCount = 0, totalMatches = 0, curPage = 1;
+const hcState = {};           // number -> 'inc' | 'exc'
+
+function parseRange(txt, lo, hi){
+  if(!txt || !txt.trim()) return null;
+  const m = txt.trim().match(/^(\d+)\s*[-–—to]+\s*(\d+)$/i) || txt.trim().match(/^(\d+)$/);
+  if(!m) return { error:`"${txt}" isn't a range — use a form like 110-130.` };
+  const a = +m[1], b = m[2] !== undefined ? +m[2] : +m[1];
+  const min = Math.min(a,b), max = Math.max(a,b);
+  if(max < lo || min > hi) return { error:`Range ${min}-${max} is outside the possible ${lo}-${hi}.` };
+  return { min, max };
 }
 
-/* Rejection sampling: draw uniformly at random, keep sets satisfying every
-   enabled rule. Uniform within the allowed pool -- no combination is favoured. */
-function generateByRules(n){
-  const out = [];
-  let tries = 0;
-  const MAX = 300000;
-  while(out.length < n && tries < MAX){
-    tries++;
-    const c = randomCombo();
-    if(!passesRules(c)) continue;
-    if(out.some(o => o.nums.filter(x=>c.includes(x)).length >= 5)) continue;
-    out.push({ nums:c, ...crowdingScore(c) });
-  }
-  return { out, tries, exhausted: out.length < n };
+function readOptions(){
+  const err = [];
+  const sum    = parseRange(document.getElementById('optSum').value, 21, 237);
+  const spread = parseRange(document.getElementById('optSpread').value, 5, 41);
+  if(sum && sum.error) err.push(sum.error);
+  if(spread && spread.error) err.push(spread.error);
+
+  const oddRaw  = document.getElementById('optOdd').value.trim();
+  const evenRaw = document.getElementById('optEven').value.trim();
+  let odd = null;
+  if(oddRaw !== '' && evenRaw !== ''){
+    if(+oddRaw + +evenRaw !== 6) err.push(`Odd (${oddRaw}) + even (${evenRaw}) must total 6.`);
+    else odd = +oddRaw;
+  } else if(oddRaw !== '')  odd = +oddRaw;
+  else if(evenRaw !== '')   odd = 6 - (+evenRaw);
+  if(odd !== null && (odd < 0 || odd > 6)) err.push('Odd/even counts must be between 0 and 6.');
+
+  const inc = [], exc = [];
+  Object.entries(hcState).forEach(([n,v])=> (v==='inc'?inc:exc).push(+n));
+  if(inc.length > 6) err.push(`You marked ${inc.length} numbers as "must include" — a draw holds only 6.`);
+
+  return { sum, spread, odd, inc, exc, err };
 }
 
-function renderGenerated(res){
-  const el = document.getElementById('genOut');
-  if(res.out.length === 0){
-    el.innerHTML = `<p class="warn">No combination satisfied every rule after ${res.tries.toLocaleString()} attempts.
-      The rules are contradictory or far too tight — loosen the sum range or spread and try again.</p>`;
+/* Enumerate. Uses nested loops with running-sum pruning so filtered runs are fast. */
+function enumerate(o){
+  const incMask = new Uint8Array(43), excMask = new Uint8Array(43);
+  o.inc.forEach(n=> incMask[n]=1);
+  o.exc.forEach(n=> excMask[n]=1);
+  const needInc = o.inc.length;
+  const sumMin = o.sum ? o.sum.min : 21,  sumMax = o.sum ? o.sum.max : 237;
+  const sprMin = o.spread ? o.spread.min : 5, sprMax = o.spread ? o.spread.max : 41;
+
+  const extra = RULE_DEFS.filter(r => RULE_STATE[r.id].on);
+  const buf = new Uint8Array(Math.min(MAX_STORE, 400000) * 6);
+  let cap = buf.length / 6, out = buf, n = 0, total = 0;
+  const c = new Array(6);
+
+  for(let a=1;a<=37;a++){
+    if(excMask[a]) continue;
+    for(let b=a+1;b<=38;b++){
+      if(excMask[b]) continue;
+      for(let d=b+1;d<=39;d++){
+        if(excMask[d]) continue;
+        for(let e=d+1;e<=40;e++){
+          if(excMask[e]) continue;
+          for(let f=e+1;f<=41;f++){
+            if(excMask[f]) continue;
+            const p5 = a+b+d+e+f;
+            for(let g=f+1;g<=42;g++){
+              if(excMask[g]) continue;
+              const s = p5+g;
+              if(s < sumMin || s > sumMax) continue;
+              const spr = g-a;
+              if(spr < sprMin || spr > sprMax) continue;
+              if(o.odd !== null){
+                const od = (a&1)+(b&1)+(d&1)+(e&1)+(f&1)+(g&1);
+                if(od !== o.odd) continue;
+              }
+              if(needInc){
+                const hits = incMask[a]+incMask[b]+incMask[d]+incMask[e]+incMask[f]+incMask[g];
+                if(hits !== needInc) continue;
+              }
+              if(extra.length){
+                c[0]=a;c[1]=b;c[2]=d;c[3]=e;c[4]=f;c[5]=g;
+                let ok = true;
+                for(const r of extra){ if(!r.test(c, RULE_STATE[r.id].val)){ ok=false; break; } }
+                if(!ok) continue;
+              }
+              total++;
+              if(n < MAX_STORE){
+                if(n >= cap){                       // grow
+                  const bigger = new Uint8Array(Math.min(MAX_STORE, cap*2) * 6);
+                  bigger.set(out.subarray(0, n*6));
+                  out = bigger; cap = bigger.length/6;
+                }
+                const i = n*6;
+                out[i]=a; out[i+1]=b; out[i+2]=d; out[i+3]=e; out[i+4]=f; out[i+5]=g;
+                n++;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return { store: out, stored: n, total };
+}
+
+function comboAt(i){
+  const b = i*6;
+  return [store[b],store[b+1],store[b+2],store[b+3],store[b+4],store[b+5]];
+}
+
+function renderPage(){
+  const pages = Math.max(1, Math.ceil(storeCount / PAGE_SIZE));
+  curPage = Math.min(Math.max(1, curPage), pages);
+  const start = (curPage-1)*PAGE_SIZE, end = Math.min(start+PAGE_SIZE, storeCount);
+
+  let rows = '';
+  for(let i=start;i<end;i++){
+    const c = comboAt(i);
+    const odd = c.filter(x=>x%2).length;
+    rows += `<div class="res-row">
+      <div class="res-idx">#${(i+1).toLocaleString()}</div>
+      <div class="balls">${c.map(x=>ballHtml(x)).join('')}</div>
+      <div class="res-meta">sum ${c.reduce((p,q)=>p+q,0)} · ${odd}o/${6-odd}e · spread ${c[5]-c[0]}</div>
+    </div>`;
+  }
+
+  // page buttons with ellipsis
+  const btn = (p,label)=>`<button class="${p===curPage?'cur':''}" data-page="${p}">${label||p}</button>`;
+  let nav = '';
+  if(pages > 1){
+    nav += btn(Math.max(1,curPage-1),'‹ Prev');
+    const shown = new Set([1,2,pages-1,pages,curPage-1,curPage,curPage+1]);
+    let last = 0;
+    for(let p=1;p<=pages;p++){
+      if(!shown.has(p)) continue;
+      if(p - last > 1) nav += '<span class="dots">…</span>';
+      nav += btn(p); last = p;
+    }
+    nav += btn(Math.min(pages,curPage+1),'Next ›');
+  }
+
+  document.getElementById('genOut').innerHTML = `
+    <div class="count-bar">
+      <div class="count-big">${totalMatches.toLocaleString()}</div>
+      <div class="count-sub">combination${totalMatches===1?'':'s'} match your options
+        ${totalMatches ? `· ${(totalMatches/5245786*100).toFixed(totalMatches/5245786*100<0.01?4:2)}% of all 5,245,786` : ''}</div>
+    </div>
+    ${totalMatches > storeCount
+      ? `<p class="warn">Showing the first ${storeCount.toLocaleString()} of ${totalMatches.toLocaleString()}.
+         Narrow the options to browse or export the rest.</p>` : ''}
+    ${storeCount ? rows : '<p class="empty">No combination matches these options — try widening a range.</p>'}
+    ${pages>1 ? `<div class="pager">${nav}</div>
+      <p class="manual-note">Page ${curPage.toLocaleString()} of ${pages.toLocaleString()} · ${PAGE_SIZE} per page</p>` : ''}
+  `;
+  document.querySelectorAll('[data-page]').forEach(b=>
+    b.addEventListener('click', ()=>{ curPage = +b.dataset.page; renderPage();
+      document.getElementById('genOut').scrollIntoView({behavior:'smooth', block:'start'}); }));
+}
+
+document.getElementById('genBtn').addEventListener('click', ()=>{
+  const o = readOptions();
+  if(o.err.length){
+    document.getElementById('genOut').innerHTML =
+      `<p class="warn">${o.err.map(e=>'· '+e).join('<br>')}</p>`;
     return;
   }
-  el.innerHTML = res.out.map((p,i)=>{
-    const odd = p.nums.filter(n=>n%2).length;
-    return `<div class="pick-row">
-      <div class="pick-label" style="min-width:26px;">#${i+1}</div>
-      <div class="balls">${p.nums.map(n=>ballHtml(n)).join('')}</div>
-      <div class="pick-label">sum ${p.sum} · ${odd}odd/${6-odd}even · ${p.high}&gt;31</div>
-      <div class="pick-meter"><i style="width:${Math.max(4,p.score)}%;background:${scoreColor(p.score)}"></i></div>
-      <div class="pick-label">${scoreWord(p.score)} ${p.score}</div>
-    </div>`;
-  }).join('') +
-  (res.exhausted
-    ? `<p class="warn">Only ${res.out.length} distinct set(s) met the rules after ${res.tries.toLocaleString()} attempts. Loosen a rule for more.</p>`
-    : `<p class="manual-note">${res.out.length} set(s) from ${res.tries.toLocaleString()} random draws. Every set has the same 1-in-5,245,786 chance.</p>`);
-}
+  const btn = document.getElementById('genBtn');
+  const label = btn.textContent;
+  btn.textContent = 'Generating…'; btn.disabled = true;
+  setTimeout(()=>{                     // let the button repaint before the heavy loop
+    const t0 = performance.now();
+    const r = enumerate(o);
+    store = r.store; storeCount = r.stored; totalMatches = r.total; curPage = 1;
+    renderPage();
+    const ms = Math.round(performance.now()-t0);
+    const note = document.createElement('p');
+    note.className = 'manual-note';
+    note.textContent = `Enumerated all 5,245,786 combinations in ${ms} ms.`;
+    document.getElementById('genOut').appendChild(note);
+    btn.textContent = label; btn.disabled = false;
+  }, 20);
+});
 
-let lastGenerated = [];
-document.getElementById('genBtn').addEventListener('click', ()=>{
-  const n = Math.max(1, Math.min(50, parseInt(document.getElementById('genCount').value,10) || 5));
-  const res = generateByRules(n);
-  lastGenerated = res.out;
-  renderGenerated(res);
+document.getElementById('csvBtn').addEventListener('click', ()=>{
+  if(!storeCount){ alert('Generate some combinations first.'); return; }
+  if(storeCount > 250000 &&
+     !confirm(`This will export ${storeCount.toLocaleString()} rows (~${Math.round(storeCount*30/1048576)} MB). Continue?`)) return;
+  const parts = ['n1,n2,n3,n4,n5,n6,sum,odd,even,spread\n'];
+  let chunk = [];
+  for(let i=0;i<storeCount;i++){
+    const c = comboAt(i);
+    const odd = c.filter(x=>x%2).length;
+    chunk.push(`${c.join(',')},${c.reduce((p,q)=>p+q,0)},${odd},${6-odd},${c[5]-c[0]}`);
+    if(chunk.length === 20000){ parts.push(chunk.join('\n')+'\n'); chunk = []; }
+  }
+  if(chunk.length) parts.push(chunk.join('\n')+'\n');
+  const url = URL.createObjectURL(new Blob(parts, {type:'text/csv'}));
+  const a = document.createElement('a');
+  a.href = url; a.download = `loto_combinations_${storeCount}.csv`; a.click();
+  URL.revokeObjectURL(url);
 });
-document.getElementById('rulesResetBtn').addEventListener('click', resetRules);
-document.getElementById('copyBtn').addEventListener('click', ()=>{
-  if(!lastGenerated.length){ alert('Generate some sets first.'); return; }
-  const txt = lastGenerated.map(p=>p.nums.join(' ')).join('\n');
-  navigator.clipboard.writeText(txt).then(
-    ()=> alert('Copied:\n\n'+txt),
-    ()=> alert(txt)
-  );
+
+document.getElementById('optResetBtn').addEventListener('click', ()=>{
+  ['optSum','optSpread','optOdd','optEven'].forEach(id=> document.getElementById(id).value='');
+  Object.keys(hcState).forEach(k=> delete hcState[k]);
+  renderHotCold();
+  document.getElementById('genOut').innerHTML = '';
 });
+
+document.getElementById('rulesToggle').addEventListener('click', ()=>{
+  const w = document.getElementById('rulesWrap');
+  const open = w.style.display !== 'none';
+  w.style.display = open ? 'none' : 'block';
+  document.getElementById('rulesToggle').textContent = open ? 'Extra rules ▾' : 'Extra rules ▴';
+});
+
+/* --- hot/cold picker ------------------------------------------------------- */
+function renderHotCold(){
+  const freq = {}; for(let i=1;i<=42;i++) freq[i]=0;
+  allDraws.forEach(d=> d.numbers.forEach(n=> freq[n]++));
+  const ranked = Object.entries(freq).map(([n,c])=>({n:+n,c})).sort((a,b)=>b.c-a.c);
+  document.getElementById('hcTotal').textContent = allDraws.length.toLocaleString();
+
+  const chip = e => `<span class="hc ${hcState[e.n]||''}" data-hc="${e.n}">${e.n} <small>${e.c}×</small></span>`;
+  document.getElementById('hotList').innerHTML  = ranked.slice(0,12).map(chip).join('');
+  document.getElementById('coldList').innerHTML = ranked.slice(-12).reverse().map(chip).join('');
+
+  const inc = Object.keys(hcState).filter(k=>hcState[k]==='inc').map(Number).sort((a,b)=>a-b);
+  const exc = Object.keys(hcState).filter(k=>hcState[k]==='exc').map(Number).sort((a,b)=>a-b);
+  document.getElementById('hcSummary').innerHTML =
+    (inc.length || exc.length)
+      ? `Must include: <b style="color:var(--teal)">${inc.join(', ')||'—'}</b> · Must exclude: <b style="color:#C98B8B">${exc.join(', ')||'—'}</b>`
+      : 'No numbers selected.';
+
+  document.querySelectorAll('[data-hc]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const n = el.dataset.hc;
+      hcState[n] = hcState[n] === undefined ? 'inc' : hcState[n] === 'inc' ? 'exc' : undefined;
+      if(hcState[n] === undefined) delete hcState[n];
+      renderHotCold();
+    });
+  });
+}
 
 document.getElementById('scoreBtn').addEventListener('click', ()=>{
   const nums = [...document.querySelectorAll('.sNum')].map(i=>parseInt(i.value,10));
