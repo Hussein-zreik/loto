@@ -222,13 +222,17 @@
       <button class="ghost" id="copyBtn">Copy results</button>
     </div>
 
-    <p style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-family:'IBM Plex Mono',monospace;margin:18px 0 10px;">Rules — tick to enforce</p>
+    <p style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-family:'IBM Plex Mono',monospace;margin:18px 0 10px;">Rules — ★ = recommended, on by default</p>
     <div id="rulesBox" class="rules-grid"></div>
 
     <div id="genOut"></div>
-    <p class="caveat">Rules shape <i>which</i> combinations you play; they cannot change the odds of any
-    one of them winning (1 in 5,245,786 regardless). Tightening rules narrows the pool you draw from —
-    it does not improve your chance.</p>
+    <p class="caveat"><b>Why only the ★ rules are on.</b> Rules cost you nothing — a single ticket is
+    1 in 5,245,786 whichever combination it is, so narrowing the pool does not narrow your chance. But
+    only some rules <i>buy</i> you anything. The starred ones steer away from combinations humans
+    over-pick (birthdays, runs, slip patterns, replayed past winners), which cuts the risk of splitting
+    a prize. The unstarred ones — sum ranges, odd/even balance, spread — filter real draws at exactly
+    the same rate they filter random ones (verified against all 2,421 draws in this archive), so they
+    target nothing. They are harmless; they are just not worth switching on.</p>
   </section>
 
   <section class="panel">
@@ -484,27 +488,32 @@ function drawnBefore(s){
 }
 
 const RULE_DEFS = [
-  { id:'minHigh',  label:'At least N numbers above 31', def:2,  on:true,
+  // --- RECOMMENDED: these target crowded human picks, so they raise expected
+  //     payout. They cost nothing -- one ticket is 1 in 5,245,786 either way.
+  { id:'minHigh',  label:'★ At least N numbers above 31', def:1,  on:true,
     test:(s,v)=> s.filter(n=>n>31).length >= v },
-  { id:'maxRun',   label:'Longest consecutive run at most', def:2, on:true,
+  { id:'maxRun',   label:'★ Longest consecutive run at most', def:3, on:true,
     test:(s,v)=> maxRunOf(s) <= v },
-  { id:'minOdd',   label:'At least N odd numbers', def:2, on:true,
-    test:(s,v)=> s.filter(n=>n%2).length >= v },
-  { id:'maxOdd',   label:'At most N odd numbers', def:4, on:true,
-    test:(s,v)=> s.filter(n=>n%2).length <= v },
-  { id:'sumMin',   label:'Sum at least', def:110, on:true,
-    test:(s,v)=> s.reduce((a,b)=>a+b,0) >= v },
-  { id:'sumMax',   label:'Sum at most', def:190, on:true,
-    test:(s,v)=> s.reduce((a,b)=>a+b,0) <= v },
-  { id:'minSpread',label:'Spread (highest − lowest) at least', def:20, on:true,
-    test:(s,v)=> (s[5]-s[0]) >= v },
-  { id:'maxDigit', label:'At most N sharing a last digit', def:2, on:false,
-    test:(s,v)=>{ const c={}; s.forEach(n=>c[n%10]=(c[n%10]||0)+1); return Math.max(...Object.values(c)) <= v; } },
-  { id:'noArith',  label:'No arithmetic sequence', def:null, on:true,
+  { id:'noArith',  label:'★ No arithmetic sequence', def:null, on:true,
     test:(s)=> !isArithmetic(s) },
-  { id:'notDrawn', label:'Never drawn before in this archive', def:null, on:false,
+  { id:'maxDigit', label:'★ At most N sharing a last digit', def:3, on:true,
+    test:(s,v)=>{ const c={}; s.forEach(n=>c[n%10]=(c[n%10]||0)+1); return Math.max(...Object.values(c)) <= v; } },
+  { id:'notDrawn', label:'★ Never drawn before in this archive', def:null, on:true,
     test:(s)=> !drawnBefore(s) },
-  { id:'maxCrowd', label:'Crowding score at most', def:15, on:true,
+
+  // --- OPTIONAL: no known effect on how many people share your numbers.
+  //     Harmless, but they buy you nothing. Off by default.
+  { id:'minOdd',   label:'At least N odd numbers', def:1, on:false,
+    test:(s,v)=> s.filter(n=>n%2).length >= v },
+  { id:'maxOdd',   label:'At most N odd numbers', def:5, on:false,
+    test:(s,v)=> s.filter(n=>n%2).length <= v },
+  { id:'sumMin',   label:'Sum at least', def:100, on:false,
+    test:(s,v)=> s.reduce((a,b)=>a+b,0) >= v },
+  { id:'sumMax',   label:'Sum at most', def:200, on:false,
+    test:(s,v)=> s.reduce((a,b)=>a+b,0) <= v },
+  { id:'minSpread',label:'Spread (highest − lowest) at least', def:20, on:false,
+    test:(s,v)=> (s[5]-s[0]) >= v },
+  { id:'maxCrowd', label:'Crowding score at most', def:15, on:false,
     test:(s,v)=> crowdingScore(s).score <= v },
 ];
 
