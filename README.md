@@ -27,24 +27,29 @@ on a phone).
 # one-time setup
 pip install selenium webdriver-manager beautifulsoup4
 
-# grab only what's new (recommended for routine refreshes)
-python scrape_loto.py --skip-existing
+# catch up to today (the normal refresh)
+python scrape_loto.py --update
 
 # see all options
 python scrape_loto.py --help
 ```
 
 What it does:
-- Defaults to `--start 2020-03 --end <current month>`.
+- `--update` starts from the month of the newest draw already in `data.json` and scrapes
+  through the current month, re-reading that latest month so its later draws are picked up.
 - **Merges safely**: existing draws in `data.json` are preserved; only dates not already
   present are added. Pass `--overwrite` to let scraped rows replace same-date entries.
 - Retries each month, and writes partial progress if you Ctrl-C or it's interrupted.
 
 Useful flags:
-- `--skip-existing` — skip months already present (fastest re-sync).
+- `--update` — catch up to today. **This is the one you want for a routine refresh.**
 - `--dry-run` — scrape and report counts **without** writing `data.json`.
 - `--no-headless` — show the browser window so you can watch what it's doing.
 - `--start YYYY-MM --end YYYY-MM` — scrape a specific window.
+- `--skip-existing` — skips any month that already has draws. Use it **only** for filling
+  wholly-missing historical months. Do **not** use it to catch up: the latest month is
+  normally half-filled, so it would be skipped and every recent draw missed. `--update`
+  refuses to run alongside it for that reason.
 - `--debug` — dump the live page's structure (dropdowns, options, table rows) to
   `loto_debug.txt`.
 - `--probe` — try every known way of filtering the page and report which one works,
@@ -94,11 +99,12 @@ Live at `https://<username>.github.io/loto/`. (First-time setup only: Settings �
 Source → "GitHub Actions", which has already been done for this repo.)
 
 ## 4. Keeping it updated
-- **New draws**: use the "Add a draw manually" form in the app — it saves to
+- **Routine catch-up**: `python scrape_loto.py --update`, then commit and push
+  `data.json` — Pages redeploys automatically.
+- **New draws, one at a time**: use the "Add a draw manually" form in the app — it saves to
   the browser's `localStorage`, no redeploy needed. Click "Export merged
   dataset" any time to download an updated `data.json` you can commit back,
   making those draws permanent/shared with anyone else who visits the site.
-- **Full re-sync**: re-run `scrape_loto.py` periodically and redeploy.
 
 ## Known limitations
 - `localStorage` additions are per-browser/device — they won't show up for

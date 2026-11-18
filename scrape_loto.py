@@ -461,7 +461,13 @@ def main():
     ap.add_argument("--game-select", default="LotteryName", help="id/name of the game <select> (auto-detected if wrong)")
     ap.add_argument("--wait", type=int, default=15, help="seconds to wait for page elements")
     ap.add_argument("--retries", type=int, default=2, help="retries per month on error")
-    ap.add_argument("--skip-existing", action="store_true", help="skip months that already have draws in data.json")
+    ap.add_argument("--skip-existing", action="store_true",
+                    help="skip months that already have ANY draws (for filling wholly-missing "
+                         "months only -- it will skip a partially-filled current month, so do "
+                         "not use it to catch up; use --update)")
+    ap.add_argument("--update", action="store_true",
+                    help="catch up: start from the month of the newest draw already in data.json "
+                         "and scrape through the current month")
     ap.add_argument("--overwrite", action="store_true", help="let scraped rows replace existing same-date draws")
     ap.add_argument("--no-headless", dest="headless", action="store_false", help="show the browser window")
     ap.add_argument("--dry-run", action="store_true", help="scrape but don't write data.json")
@@ -483,6 +489,16 @@ def main():
     existing_months = {d[:7] for d in existing}
     log(f"Loaded {len(existing)} existing draws from {OUTPUT_FILE.name}"
         if existing else f"No existing {OUTPUT_FILE.name}; starting fresh.")
+
+    if args.update:
+        if not existing:
+            sys.exit("--update needs an existing data.json to catch up from.")
+        if args.skip_existing:
+            sys.exit("--update and --skip-existing conflict: --skip-existing would skip the "
+                     "partially-filled latest month, which is exactly the one --update needs.")
+        newest = max(existing)
+        args.start = newest[:7]          # re-scrape that month to pick up its later draws
+        log(f"--update: newest draw is {newest}, scraping {args.start} .. {args.end}")
 
     driver = build_driver(args.headless)
 
